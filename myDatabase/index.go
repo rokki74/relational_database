@@ -13,13 +13,14 @@ type Index struct {
 	Column string
 	TableId uint16
   FileName string
-	MemBTree *BPlusTree
+	MemTree *BPlusTree
 }
 
 type BPlusTree struct {
 	IndexHeader *IndexHeader
 	BufferPool *BufferPool
 }
+
 
 type IndexEntry struct {
 	Key []byte
@@ -41,13 +42,13 @@ type NodeHeader struct {
 
 type InternalNode struct {
 	Header NodeHeader
-	Keys [][]byte
+	Keys []byte
 	Children []uint32
 }
 
 type LeafNode struct {
 	Header NodeHeader
-	Keys   [][]byte
+	Keys   []byte
 	Values []RowId
 	NextLeaf uint32
 }

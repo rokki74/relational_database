@@ -16,10 +16,11 @@ type BufferPool struct{
 	/*pageId is the best key in frames map as it is helps not to hold copies of same page in the map
 	thus map[pageId]Frame is the best course here*/
 	frames: map[BufferKey]Frame,
-	tablesMap: map[uint16]string,
 	capacity: uint,
+	tablesMap *Database_Manager.tablesMap
 }
 
+//Needs updating i can no longer use tableId must be filename as it is global to indexes, fsm and tables
 func (bf *BufferPool) fetch_page(pageId uint32, tableId uint16) Page{
 	bufKey := BufferKey{tableId, pageId}
 

@@ -1,8 +1,10 @@
 package myDatabase
+
 /*A TableFileHeader i mistakenly deleted, nvim oversights i shall have to reimplement it otherwise the tables shall never
 too much on the plate i guess i bite more than i could chew almost giving up but never quiting ths system halfway never
 */
 import (
+	"encoding/binary"
 	"log"
 	"os"
 )
@@ -21,19 +23,28 @@ func (pg *Page) clean_page(){
 
 type Pager struct{
 	db Database_Manager
-	dbdbPath db.dbPath
 }
 
-func (pgr *Pager) SaveTable(table *Table){
+func (pgr *Pager) SaveTable(table *Table) string{
 	dbPath := pgr.dbPath
 	//I shall later cross check if really os.Open creates a file if it didn't exist otherwise this code should be so functioning
-	f, err := os.Open(dbPath + table.TableName+".tbl")
+	filename := dbPath + table.TableName+".tbl"
+	f, err := os.Open(filename)
 	if err != nil{
-		log.Printf("The table file for table: %v couldn't be created",table.TableName)
+		log.Printf("The table file for table: %v couldn't be created", table.TableName)
+		return 
 	}
 
+  page := new_page()
+	page.init(0)
+	page.insert_row(table.TableName)
+	header := page.read_header()
+	binary.LittleEndian.PutUint32(page.data[header.freeSpaceOffset:header.freeSpaceOffset+4], uint32(table.LastPageId))
+	binary.LittleEndian.PutUint32(page.data[:])
+	
 	//shall complete the logic later to write to the .tbl file and the fileheader etc
-	f.WriteAt(b []byte, off int64)
+	f.WriteAt(b []byte, 0)
+	return filename
 }
 
 func (pgr *Pager) WritePage(tableFileName string, pageId uint32) bool{

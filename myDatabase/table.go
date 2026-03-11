@@ -2,6 +2,7 @@ package myDatabase
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -30,11 +31,6 @@ type Schema struct{
 	columns []Column
 }
 
-type TableFileHeader struct{
-	TableSchema Schema,
-	LastPageId Uint32,
-}
-
 type FsmEntry struct{
 	PageId uint32,
 	freeBytes uint16,
@@ -42,7 +38,7 @@ type FsmEntry struct{
 
 type Table struct {
     TableName       string,
-		Manager    *TableManager,
+		TableSchema Schema,
 		LastPageId uint32,
 		LastFramePageId uint32,
 		bufferpool BufferPool,
@@ -56,15 +52,12 @@ func (db *Database_Manager) createTable(name string, columns []Column) Table{
 
    table :=  Table{
 		   TableName: name,
+			 TableSchema: schm,
 	   }
 
-	pgr := table.pager
-	pgr.Header = TableFileHeader{
-		TableSchema: schm,
-		//then the schemaSize
-	}
-
-	if pgr.SaveTable(*table, tlm.dbPath){
+  pgr := Pager{}
+	//i think this next shld have been returning table's filename so we updated in in our tablesmap
+	if pgr.SaveTable(*table, db.dbPath){
 		return table
 	}
 } 
@@ -123,25 +116,49 @@ func extractColumnValue(row string, col string){
 
 }
 
-func (t *Table) CreateIndex(name string, column string) {
+func (tb *Table)findColumnPosAndType(col string) (bool, int, ColumnType){
+	columns := tb.TableSchema.columns
+	for i=0; i<len(columns); i++{
+		if columns[i].columnName == col{
+			return true, i,columns[i].columnType
+		}
+	}
+	log.Printf("The column [%col] couldn't be found in table schema!", col)
+
+	return
+}
+
+func (tb *Table) CreateIndex(name string, column string) {
 
 	fileName := t.Name + "_" + column + ".idx"
 
-	tree := &BPlusTree{
-		TableId: t.TableId,
-		FileName: fileName,
-		BufferPool: t.BufferPool,
+	ok, colPos, colType := tb.findColumnPosAndType(column)
+	if !ok{
+		return
 	}
+	
+	indexHeader := IndexHeader{
+		RootPageId: 0,
+		ColumnPos: colPos,
+		IsUnique: false,
+		KeyType: colType,
+	}
+
+	tree := BPlusTree{
+		IndexHeader: *indexHeader,
+		BufferPool: *tb.bufferPool,
+	}
+
 
 	index := &Index{
 		Name: name,
 		TableId: t.TableId,
+		Column: column,
 		FileName: fileName,
-		HeaderMeta: IndexHeader,
 		MemTree: tree,
 	}
 
-	t.Index[column] = index
+	tb.Index[column] = index
 }
 
 func (t *Table) FindByIndex(column string, key []byte) *Row {
@@ -183,5 +200,10 @@ func encodeInt(v int32) []byte {
     buf := make([]byte, 4)
     binary.BigEndian.PutUint32(buf, uint32(v))
     return buf
+}
+
+func encodeInt64(v int64) []byte{
+	buf :make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(v))
 }
 
