@@ -1,0 +1,8 @@
+CRUCIAL THINGS TO ENSURE EFFICIENT DATABASE
+
+What happens to fragmentation?
+
+How will you compact?
+
+How will you reuse dead slots?
+

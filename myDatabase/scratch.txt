@@ -1,0 +1,69 @@
+
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_KEY:
+    raise Exception("GEMINI KEY not set")
+        
+    async def generate_content(self, prompt: str, max_retries: int = 3) -> str:
+        """Generate content with async requests and retry logic"""
+        data = {
+            "contents": [
+                {
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 1024,
+            },
+        }
+        
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    url = f"{self.api_url}?key={self.api_key}"
+                    async with session.post(url, headers=self.headers, json=data) as response:
+                        if response.status == 200:
+                            response_json = await response.json()
+                            logger.info(f"Gemini response (attempt {attempt + 1}): {response_json}")
+                            
+                            # Extract text from response
+                            try:
+                                return response_json["candidates"][0]["content"]["parts"][0]["text"]
+                            except (KeyError, IndexError) as e:
+                                logger.error(f"Error parsing Gemini response: {e}")
+                                return f"Gemini response parsing error: {e}"
+                                
+                        elif response.status == 429:  # Rate limit
+                            wait_time = (2 ** attempt) + 1
+                            logger.warning(f"Gemini rate limited, waiting {wait_time}s (attempt {attempt + 1})")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"Gemini API error {response.status}: {error_text}")
+                            if attempt == max_retries - 1:
+                                return f"Gemini API error after {max_retries} attempts: {response.status}"
+                            
+            except asyncio.TimeoutError:
+                logger.warning(f"Gemini timeout (attempt {attempt + 1})")
+                if attempt == max_retries - 1:
+                    return "Gemini timeout after maximum retries"
+                await asyncio.sleep(2 ** attempt)
+                
+            except Exception as e:
+                logger.error(f"Gemini request failed (attempt {attempt + 1}): {e}")
+                if attempt == max_retries - 1:
+                    return f"Gemini failed after {max_retries} attempts: {str(e)}"
+                await asyncio.sleep(2 ** attempt)
+        
+        return "Gemini failed after all retry attempts"
+
+def to_serializable(obj):
+    if is_dataclass(obj):
+        return asdict(obj)
+    elif isinstance(obj, list):
+        return [to_serializable(i) for i in obj]
+    elif isinstance(obj, dict):
+        return {k: to_serializable(v) for k, v in obj.items()}
+    return obj
+

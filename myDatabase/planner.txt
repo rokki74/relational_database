@@ -1,0 +1,690 @@
+
+DATABASE BUILD PLAN
+
+| SQL Interface / Client           |
++-----------------------------------+
+| Query Processor                  |
+|  - Parser                        |
+|  - Binder                        |
+|  - Optimizer                     |
+|  - Executor                      |
++-----------------------------------+
+| Transaction Manager              e
+|  - Lock Manager                  |
+|  - MVCC / Versioning             |
+|  - WAL                           |
+|  - Recovery                      |
++-----------------------------------+
+| Storage Engine                   |
+|  - Buffer Pool                   |
+|  - Page Manager + FSM                  |
+|  - File Manager + tables                 |
+|  - Indexes (B+Tree)              |
++-----------------------------------+
+| OS / Disk                        |
++-----------------------------------+
+
+🧱 PHASE 1 — STORAGE ENGINE (FOUNDATION)
+1️⃣ Page Layout design
+struct PageHeader {
+    uint32_t page_id;
+    uint16_t free_space_offset;
+    uint16_t slot_count;
+}
+ Header | Free Space | Records | Slot Directory |
+struct Slot {
+    uint16_t offset;
+    uint16_t length;
+}
+2️⃣ File Manager
+Opening DB file
+Reading page N
+Writing page Never
+Allocating new page_id
+
+Good. This is where you stop “experimenting” and start **architecting deliberately**.
+
+You’re not building a toy anymore.
+You’re building a *real miniature RDBMS*.
+
+I’m going to give you a **full structured implementation blueprint** — broken into layers, components, internal objects, and the order to build them.
+
+This is essentially your **DB kernel roadmap**.
+
+---
+
+# 🔷 OVERALL ARCHITECTURE
+
+Think in layers (bottom → top):
+
+```
++-----------------------------------+
+| SQL Interface / Client           |
++-----------------------------------+
+| Query Processor                  |
+|  - Parser                        |
+|  - Binder                        |
+|  - Optimizer                     |
+|  - Executor                      |
++-----------------------------------+
+| Transaction Manager              |
+|  - Lock Manager                  |
+|  - MVCC / Versioning             |
+|  - WAL                           |
+|  - Recovery                      |
++-----------------------------------+
+| Storage Engine                   |
+|  - Buffer Pool                   |
+|  - Page Manager                  |
+|  - File Manager                  |
+|  - Indexes (B+Tree)              |
++-----------------------------------+
+| OS / Disk                        |
++-----------------------------------+
+```
+
+We build from bottom up.
+
+---
+
+# 🧱 PHASE 1 — STORAGE ENGINE (FOUNDATION)
+
+This must be rock solid.
+
+---
+
+## 1️⃣ Page Layout Design
+
+### Define:
+
+```c
+struct PageHeader {
+    uint32_t page_id;
+    uint16_t free_space_offset;
+    uint16_t slot_count;
+}
+```
+
+Then implement **slotted page layout**:
+
+```
+| Header | Free Space | Records | Slot Directory |
+```
+
+Each slot:
+
+```c
+struct Slot {
+    uint16_t offset;
+    uint16_t length;
+}
+```
+
+### Why?
+
+* Allows variable-length records
+* Allows delete without shifting whole page
+* Supports vacuum later
+
+---
+
+## 2️⃣ File Manager
+
+Responsible for:
+
+* Opening DB file
+* Reading page N
+* Writing page N
+* Allocating new page
+
+APIs:
+
+```c
+Page read_page(PageID id);
+void write_page(PageID id, Page*);
+PageID allocate_page();
+```
+
+It should:
+
+* Use `pread` / `pwrite`
+* Be page-size aligned
+* Never cache anything
+
+---
+
+## 3️⃣ Buffer Pool
+
+This is your first “real systems” component.
+
+Responsibilities:
+
+* Cache pages in memory
+* Pin/unpin pages
+* Track dirty pages
+* Eviction (LRU or clock)
+
+Core objects:
+
+```c
+struct Frame {
+    Page page;
+    bool dirty;
+    int pin_count;
+}
+```
+
+Buffer Manager must:
+
+* Lookup page in hash table
+* If not found → evict victim
+* Write dirty page before eviction
+
+---
+
+## 4️⃣ Record Manager
+
+Responsibilities:
+
+* Insert record
+* Delete record
+* Update record
+* Fetch record
+
+Define:
+
+```c
+struct RID {
+    PageID page_id;
+    uint16_t slot_id;
+}
+```
+
+Record insertion:
+
+* Find page with space
+* Write data
+* Add slot entry
+* Return RID
+
+---
+
+# 🌲 PHASE 2 — INDEXES (B+ TREE)
+
+You already touched this conceptually.
+
+---
+
+## 1️⃣ Index Page Types
+
+```c
+enum PageType {
+    INTERNAL,
+    LEAF
+};
+```
+
+Leaf:
+
+* key → RID
+
+Internal:
+
+* key → child_page_id
+
+---
+
+## 2️⃣ B+Tree Operations
+
+You must implement:
+
+* search(key)
+* insert(key, rid)
+* split leaf
+* split internal
+* root split
+* delete (later)
+
+Key concept:
+
+* All leaves linked (range scan support)
+
+---
+
+## 3️⃣ Index Manager
+
+Maps:
+
+```
+index_name → root_page_id
+```
+
+Stores metadata in system catalog.
+
+---
+
+# 🔐 PHASE 3 — TRANSACTION SYSTEM
+
+Now things become real.
+
+---
+
+## 1️⃣ WAL (Write Ahead Log)
+
+Log record types:
+
+```c
+enum LogType {
+    INSERT,
+    DELETE,
+    UPDATE,
+    BEGIN,
+    COMMIT,
+    ABORT
+};
+```
+
+Log record:
+
+```c
+struct LogRecord {
+    LSN lsn;
+    TxnID txn_id;
+    LogType type;
+    PageID page_id;
+    before_image;
+    after_image;
+}
+```
+
+Rules:
+
+* Log must flush before dirty page flush
+* Every page stores its latest LSN
+
+---
+
+## 2️⃣ Log Manager
+
+Responsibilities:
+
+* Append log record
+* Assign LSN
+* Flush log buffer
+
+APIs:
+
+```c
+LSN append_log(LogRecord*);
+void flush_upto(LSN);
+```
+
+---
+
+## 3️⃣ Recovery (ARIES-lite)
+
+Implement 3 phases:
+
+1. Analysis
+2. Redo
+3. Undo
+
+You can simplify:
+
+* No fuzzy checkpoints at first
+* Just full scan recovery
+
+---
+
+## 4️⃣ Lock Manager
+
+Implement:
+
+* Shared locks (S)
+* Exclusive locks (X)
+
+Use:
+
+```c
+map<ResourceID, LockQueue>
+```
+
+Support:
+
+* Lock upgrade
+* Deadlock detection (wait-for graph)
+
+---
+
+## 5️⃣ Transaction Manager
+
+Manages:
+
+```c
+struct Transaction {
+    TxnID id;
+    state;
+    list<Lock>;
+}
+```
+
+Supports:
+
+* begin
+* commit
+* abort
+
+---
+
+# 🧠 PHASE 4 — QUERY PROCESSOR
+
+Now we move to SQL layer.
+
+---
+
+# 1️⃣ LEXER (Tokenizer)
+
+Input:
+
+```
+SELECT name FROM employees WHERE id = 5;
+```
+
+Token types:
+
+* KEYWORD
+* IDENTIFIER
+* NUMBER
+* STRING
+* OPERATOR
+
+Build DFA-based tokenizer.
+
+---
+
+# 2️⃣ PARSER (AST Builder)
+
+Define AST nodes:
+
+```c
+struct SelectStmt {
+    vector<Expr> projection;
+    TableRef from;
+    Expr where;
+}
+```
+
+Implement recursive descent parser.
+
+---
+
+# 3️⃣ BINDER
+
+Resolves:
+
+* Table names
+* Column names
+* Types
+
+Turns AST into:
+
+```
+Logical Plan
+```
+
+---
+
+# 4️⃣ LOGICAL PLAN NODES
+
+Examples:
+
+```
+LogicalScan
+LogicalFilter
+LogicalProject
+LogicalJoin
+LogicalAggregate
+```
+
+---
+
+# 5️⃣ OPTIMIZER
+
+Start simple:
+
+* Rule-based optimization
+* Predicate pushdown
+* Index selection
+* Projection pruning
+
+Later:
+
+* Cost-based optimizer
+* Cardinality estimation
+
+---
+
+# ⚙️ PHASE 5 — EXECUTION ENGINE
+
+Turn logical plan into physical operators.
+
+---
+
+## Physical Operators
+
+Implement iterator model:
+
+```c
+class Executor {
+    virtual void Init();
+    virtual Tuple Next();
+}
+```
+
+Operators:
+
+* SeqScanExecutor
+* IndexScanExecutor
+* FilterExecutor
+* ProjectionExecutor
+* NestedLoopJoinExecutor
+* HashJoinExecutor
+
+Each pulls tuples from child.
+
+---
+
+# 🔄 Full Query Flow
+
+User runs:
+
+```
+SELECT * FROM employees WHERE id = 10;
+```
+
+Flow:
+
+1. Tokenize
+2. Parse → AST
+3. Bind → Logical Plan
+4. Optimize → Physical Plan
+5. Executor:
+
+   * Begin transaction
+   * Acquire locks
+   * Fetch page from buffer
+   * Return tuple
+6. Commit
+
+---
+
+# 🏗️ System Catalog (Don’t Forget This)
+
+You need metadata tables:
+
+* tables
+* columns
+* indexes
+
+Stored in pages too.
+
+---
+
+# 🧪 PHASE 6 — Testing Strategy
+
+For each component:
+
+* Unit test in isolation
+* Crash simulation
+* Corruption test
+* Concurrency test
+
+You must simulate:
+
+* Crash after WAL write
+* Crash before commit
+* Dirty page not flushed
+
+---
+
+# 🔥 Final Architecture Objects Summary
+
+### Storage
+
+* Page
+* Slot
+* RID
+* Frame
+* BufferPool
+* FileManager
+
+### Index
+
+* BPlusTree
+* InternalNode
+* LeafNode
+
+### Transactions
+
+* Transaction
+* LogRecord
+* LockManager
+* LogManager
+* RecoveryManager
+
+### Query
+
+* Token
+* ASTNode
+* LogicalPlanNode
+* PhysicalOperator
+* Executor
+
+---
+
+# ⚔️ Build Order (Critical)
+
+1. Page + File
+2. Buffer Pool
+3. Record Manager
+4. B+Tree
+5. WAL (basic)
+6. Transactions (single-threaded first)
+7. Parser
+8. Logical Planner
+9. Executor
+10. Optimizer
+
+Never mix layers early.
+
+---
+
+# ⚡ If You Finish This
+
+You will understand:
+
+* PostgreSQL architecture
+* MySQL InnoDB internals
+* ARIES recovery
+* Real DB engineering
+
+Not at surface level.
+
+At kernel level.
+
+---
+
+If you want next, I can:
+
+* Expand each phase into weekly execution milestones
+* Or write a “PostgreSQL-style deep dive mapping” so you see how yours compares to real systems
+* Or design concurrency stress tests
+
+Your move.
+Page read_page(PageID id);
+void write_page(PageID id, Page*);
+
+
+ Buffer Pool
+ Cache pages in memory</p></li><li><p>Pin/unpin pages</p></li><li><p>Track dirty pages</p></li><li><p>Eviction (LRU or clock)
+ struct Frame {
+    Page page;
+    bool dirty;
+    int pin_count;
+}
+</code></pre><p>Buffer Manager must:</p><ul><li><p>Lookup page in hash table</p></li><li><p>If not found → evict victim</p></li><li><p>Write dirty page before eviction</p></li></ul><hr><h2>4️⃣ Record Manager</h2><p>Responsibilities:</p><ul><li><p>Insert record</p></li><li><p>Delete record</p></li><li><p>Update record</p></li><li><p>Fetch record</p></li></ul><p>Define:</p><pre><code class="language-c">struct RID {
+    PageID page_id;
+    uint16_t slot_id;
+}
+</code></pre><p>Record insertion:</p><ul><li><p>Find page with space</p></li><li><p>Write data</p></li><li><p>Add slot entry</p></li><li><p>Return RID</p></li></ul><hr><h1>🌲 PHASE 2 — INDEXES (B+ TREE)</h1><p>You already touched this conceptually.</p><hr><h2>1️⃣ Index Page Types</h2><pre><code class="language-c">enum PageType {
+    INTERNAL,
+    LEAF
+};
+</code></pre><p>Leaf:</p><ul><li><p>key → RID</p></li></ul><p>Internal:</p><ul><li><p>key → child_page_id</p></li></ul><hr><h2>2️⃣ B+Tree Operations</h2><p>You must implement:</p><ul><li><p>search(key)</p></li><li><p>insert(key, rid)</p></li><li><p>split leaf</p></li><li><p>split internal</p></li><li><p>root split</p></li><li><p>delete (later)</p></li></ul><p>Key concept:</p><ul><li><p>All leaves linked (range scan support)</p></li></ul><hr><h2>3️⃣ Index Manager</h2><p>Maps:</p><pre><code>index_name → root_page_id
+</code></pre><p>Stores metadata in system catalog.</p><hr><h1>🔐 PHASE 3 — TRANSACTION SYSTEM</h1><p>Now things become real.</p><hr><h2>1️⃣ WAL (Write Ahead Log)</h2><p>Log record types:</p><pre><code class="language-c">enum LogType {
+    INSERT,
+    DELETE,
+    UPDATE,
+    BEGIN,
+    COMMIT,
+    ABORT
+};
+</code></pre><p>Log record:</p><pre><code class="language-c">struct LogRecord {
+    LSN lsn;
+    TxnID txn_id;
+    LogType type;
+    PageID page_id;
+    before_image;
+    after_image;
+}
+</code></pre><p>Rules:</p><ul><li><p>Log must flush before dirty page flush</p></li><li><p>Every page stores its latest LSN</p></li></ul><hr><h2>2️⃣ Log Manager</h2><p>Responsibilities:</p><ul><li><p>Append log record</p></li><li><p>Assign LSN</p></li><li><p>Flush log buffer</p></li></ul><p>APIs:</p><pre><code class="language-c">LSN append_log(LogRecord*);
+void flush_upto(LSN);
+</code></pre><hr><h2>3️⃣ Recovery (ARIES-lite)</h2><p>Implement 3 phases:</p><ol><li><p>Analysis</p></li><li><p>Redo</p></li><li><p>Undo</p></li></ol><p>You can simplify:</p><ul><li><p>No fuzzy checkpoints at first</p></li><li><p>Just full scan recovery</p></li></ul><hr><h2>4️⃣ Lock Manager</h2><p>Implement:</p><ul><li><p>Shared locks (S)</p></li><li><p>Exclusive locks (X)</p></li></ul><p>Use:</p><pre><code class="language-c">map&lt;ResourceID, LockQueue&gt;
+</code></pre><p>Support:</p><ul><li><p>Lock upgrade</p></li><li><p>Deadlock detection (wait-for graph)</p></li></ul><hr><h2>5️⃣ Transaction Manager</h2><p>Manages:</p><pre><code class="language-c">struct Transaction {
+    TxnID id;
+    state;
+    list&lt;Lock&gt;;
+}
+</code></pre><p>Supports:</p><ul><li><p>begin</p></li><li><p>commit</p></li><li><p>abort</p></li></ul><hr><h1>🧠 PHASE 4 — QUERY PROCESSOR</h1><p>Now we move to SQL layer.</p><hr><h1>1️⃣ LEXER (Tokenizer)</h1><p>Input:</p><pre><code>SELECT name FROM employees WHERE id = 5;
+</code></pre><p>Token types:</p><ul><li><p>KEYWORD</p></li><li><p>IDENTIFIER</p></li><li><p>NUMBER</p></li><li><p>STRING</p></li><li><p>OPERATOR</p></li></ul><p>Build DFA-based tokenizer.</p><hr><h1>2️⃣ PARSER (AST Builder)</h1><p>Define AST nodes:</p><pre><code class="language-c">struct SelectStmt {
+    vector&lt;Expr&gt; projection;
+    TableRef from;
+    Expr where;
+}
+</code></pre><p>Implement recursive descent parser.</p><hr><h1>3️⃣ BINDER</h1><p>Resolves:</p><ul><li><p>Table names</p></li><li><p>Column names</p></li><li><p>Types</p></li></ul><p>Turns AST into:</p><pre><code>Logical Plan
+</code></pre><hr><h1>4️⃣ LOGICAL PLAN NODES</h1><p>Examples:</p><pre><code>LogicalScan
+LogicalFilter
+LogicalProject
+LogicalJoin
+LogicalAggregate
+</code></pre><hr><h1>5️⃣ OPTIMIZER</h1><p>Start simple:</p><ul><li><p>Rule-based optimization</p></li><li><p>Predicate pushdown</p></li><li><p>Index selection</p></li><li><p>Projection pruning</p></li></ul><p>Later:</p><ul><li><p>Cost-based optimizer</p></li><li><p>Cardinality estimation</p></li></ul><hr><h1>⚙️ PHASE 5 — EXECUTION ENGINE</h1><p>Turn logical plan into physical operators.</p><hr><h2>Physical Operators</h2><p>Implement iterator model:</p><pre><code class="language-c">class Executor {
+    virtual void Init();
+    virtual Tuple Next();
+}
+</code></pre><p>Operators:</p><ul><li><p>SeqScanExecutor</p></li><li><p>IndexScanExecutor</p></li><li><p>FilterExecutor</p></li><li><p>ProjectionExecutor</p></li><li><p>NestedLoopJoinExecutor</p></li><li><p>HashJoinExecutor</p></li></ul><p>Each pulls tuples from child.</p><hr><h1>🔄 Full Query Flow</h1><p>User runs:</p><pre><code>SELECT * FROM employees WHERE id = 10;
+</code></pre><p>Flow:</p><ol><li><p>Tokenize</p></li><li><p>Parse → AST</p></li><li><p>Bind → Logical Plan</p></li><li><p>Optimize → Physical Plan</p></li><li><p>Executor:</p><ul><li><p>Begin transaction</p></li><li><p>Acquire locks</p></li><li><p>Fetch page from buffer</p></li><li><p>Return tuple</p></li></ul></li><li><p>Commit</p></li></ol><hr><h1>🏗️ System Catalog (Don’t Forget This)</h1><p>You need metadata tables:</p><ul><li><p>tables</p></li><li><p>columns</p></li><li><p>indexes</p></li></ul><p>Stored in pages too.</p><hr><h1>🧪 PHASE 6 — Testing Strategy</h1><p>For each component:</p><ul><li><p>Unit test in isolation</p></li><li><p>Crash simulation</p></li><li><p>Corruption test</p></li><li><p>Concurrency test</p></li></ul><p>You must simulate:</p><ul><li><p>Crash after WAL write</p></li><li><p>Crash before commit</p></li><li><p>Dirty page not flushed</p></li></ul><hr><h1>🔥 Final Architecture Objects Summary</h1><h3>Storage</h3><ul><li><p>Page</p></li><li><p>Slot</p></li><li><p>RID</p></li><li><p>Frame</p></li><li><p>BufferPool</p></li><li><p>FileManager</p></li></ul><h3>Index</h3><ul><li><p>BPlusTree</p></li><li><p>InternalNode</p></li><li><p>LeafNode</p></li></ul><h3>Transactions</h3><ul><li><p>Transaction</p></li><li><p>LogRecord</p></li><li><p>LockManager</p></li><li><p>LogManager</p></li><li><p>RecoveryManager</p></li></ul><h3>Query</h3><ul><li><p>Token</p></li><li><p>ASTNode</p></li><li><p>LogicalPlanNode</p></li><li><p>PhysicalOperator</p></li><li><p>Executor</p></li></ul><hr><h1>⚔️ Build Order (Critical)</h1><ol><li><p>Page + File</p></li><li><p>Buffer Pool</p></li><li><p>Record Manager</p></li><li><p>B+Tree</p></li><li><p>WAL (basic)</p></li><li><p>Transactions (single-threaded first)</p></li><li><p>Parser</p></li><li><p>Logical Planner</p></li><li><p>Executor</p></li><li><p>Optimizer</p></li></ol><p>Never mix layers early.</p><hr><h1>⚡ If You Finish This</h1><p>You will understand:</p><ul><li><p>PostgreSQL architecture</p></li><li><p>MySQL InnoDB internals</p></li><li><p>ARIES recovery</p></li><li><p>Real DB engineering</p></li></ul><p>Not at surface level.</p><p>At kernel level.</p><hr><p>If you want next, I can:</p><ul><li><p>Expand each phase into weekly execution milestones</p></li><li><p>Or write a “PostgreSQL-style deep dive mapping” so you see how yours compares to real systems</p></li><li><p>Or design concurrency stress tests</p></li></ul><p>Your move.</p></body></html>
+=========================================================================================================
+MY THOUGHTS
+
+A very tricky question indeed i wonder i really wouldn't want to move the rows after maybe deleting the middle row for example but i would have to keep track of indexes that have been deleted so next time i find a row that can  fit in them i insert there but this is just hope and plus keeping track of the empty rows and later deleted pages will be too much load to persist on disk and we want to reduce this as much as possible because a write maybe unsuccessful thus maybe we could just shift slot pointers in place i don't know how we would resume back to normal after this adustment on that page then though
+
