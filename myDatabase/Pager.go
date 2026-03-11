@@ -48,7 +48,7 @@ func (pgr *Pager) SaveTable(table *Table) string{
 }
 
 func (pgr *Pager) WritePage(tableFileName string, pageId uint32) bool{
-	dbPath := pgr.ddbPath
+	dbPath := pgr.db.dbPath
 	f, err := os.Open(dbPath+tableFileName)
 	if err != nil{
 		log.Print("Error could not write page")

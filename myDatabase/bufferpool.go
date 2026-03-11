@@ -7,7 +7,7 @@ type Frame struct{
 }
 
 type BufferKey{
-	TableId: uint16,
+	FileName: string,
 	PageId: uint32,
 }
 
@@ -20,18 +20,11 @@ type BufferPool struct{
 	tablesMap *Database_Manager.tablesMap
 }
 
-//Needs updating i can no longer use tableId must be filename as it is global to indexes, fsm and tables
-func (bf *BufferPool) fetch_page(pageId uint32, tableId uint16) Page{
-	bufKey := BufferKey{tableId, pageId}
+func (bf *BufferPool) fetch_page(pageId uint32, fileName string) Page{
+	bufKey := BufferKey{fileName, pageId}
 
 	frame,ok = bf.frames[bufKey]
-	if !ok{
-		tableFileName, present := bf.tablesMap[tableId]
-		if !present{
-			log.Printf("The table Id %v i not available on the map!",tableId)
-			return
-		}
-		page,found  := bf.pager.GetPage(tableFileName, pageId)
+		page,found  := bf.pager.GetPage(fileName, pageId)
 		if !found{
 			return
 		}
@@ -43,20 +36,14 @@ func (bf *BufferPool) fetch_page(pageId uint32, tableId uint16) Page{
 		}
 
 		//add it to BufferPool
-    Pool[BufferKey{tableId, pageId}] = frm
-	}
+    Pool[BufferKey{fileName, pageId}] = frm
 
 	frame.pinCount +=1
 	return frame.page
 }
 
-func (bf *BufferPool) SavePage(tableId uint16, page Page){
-	tableFileName, ok := bf.tablesMap[tableId]
-	if !ok{
-		return
-	}
-
-	bufferKey := BufferKey{tableId, page.PageId}
+func (bf *BufferPool) SavePage(fileName string, page Page){
+	bufferKey := BufferKey{fileName, page.PageId}
   
 	frm := Frame{
 		FramePage: Page,
@@ -76,35 +63,29 @@ func (bf *BufferPool) evict_pages(){
 
 			//persist just to make sure disk doesn't lag far behind after evictions
 			 }else if val.Dirty {
-					if bf.Pager.PersistPage(key.TableId, key.PageId){
+					if bf.Pager.WritePage(key.FileName, key.PageId){
 					   val.Dirty = false
 					}
       }
   }
 }	
 
-func (bf *BufferPool) DeleteTableById(tableId uint16){
+func (bf *BufferPool) DeleteTableName(fileName string){
 
 	[]bufkeys := map.keys(bf.frames)
 	for key := bufkeys{
-		if key.TableId == tableId{
+		if key.FileName == fileName{
 			bf.frames = delete(bf.frames, key)
 		}
 	}
-  
-	tableFileName, ok := bf.tablesMap[bf.tablesMap[tableId]]
-	if !ok{
-		log.Printf("TableId %v is currently invalid in the map")
-		return
-	}
 	
-	bf.pager.DeleteTable(tableFileName)
-	bf.tablesMap = delete(bf.tablesMap, tableId)
+	bf.pager.DeleteTable(fileName)
+	bf.tablesMap = delete(bf.tablesMap, fileName)
 
 }
 
-func (bf *BufferPool) MarkDirty(tableId uint16, pageId uint32{
-	bufKey := BufferKey{tableId, pageId}
+func (bf *BufferPool) MarkDirty(fileName string, pageId uint32{
+	bufKey := BufferKey{fileName, pageId}
 	bf.frames[bufKey].Dirty = true
 }
 

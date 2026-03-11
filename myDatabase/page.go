@@ -20,6 +20,7 @@ const (
 type PageHeader struct {
 	pageId          uint32
 	rowCount        uint16
+	PageLSN         uint64
 	freeSpaceOffset uint16
 	overflowPageId  uint32
 	flags           uint8
@@ -162,7 +163,7 @@ func (page *Page) insert_row(row string) (*RowID, bool) {
 func (page *Page) read_row(slot_index int) string {
 	slot := page.read_slot(slot_index)
 
-	return string(page.data[slot.offset:slot.length])
+	return string(page.data[slot.offset:slot.offset+slot.length])
 }
 
 func (pg *Page) delete_row(slot_index int) {

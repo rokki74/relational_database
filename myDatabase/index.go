@@ -1,9 +1,12 @@
 package myDatabase
 
+import(
+	"bytes"
+)
 type IndexHeader struct {
     RootPageId uint32
     TotalPages uint32
-    ColumnPos  uint32
+    ColumnPos  uint32//for extraction using parts[idx.ColumnPos] instead of a full schema lookup
     IsUnique   bool
     KeyType    ColumnType
 }
@@ -20,7 +23,6 @@ type BPlusTree struct {
 	IndexHeader *IndexHeader
 	BufferPool *BufferPool
 }
-
 
 type IndexEntry struct {
 	Key []byte
@@ -42,19 +44,19 @@ type NodeHeader struct {
 
 type InternalNode struct {
 	Header NodeHeader
-	Keys []byte
+	Keys [][]byte
 	Children []uint32
 }
 
-type LeafNode struct {
+type LeafNode struct{
 	Header NodeHeader
-	Keys   []byte
+	//bytes.Compare
+	Keys   [][]byte
 	Values []RowId
 	NextLeaf uint32
 }
 
 func (tree *BPlusTree) Search(key []byte) *RowId {
-
 	node := tree.findLeaf(key)
 
 	for i, k := range node.Keys {
@@ -72,7 +74,7 @@ func (tree *BPlusTree) findLeaf(key []byte) *LeafNode {
 
 	node := deserializeNode(page)
 
-	for node.Header.NodeType == InternalNode {
+	for node.Header.NodeType == INTERNAL{
 
 		internal := node.(*InternalNode)
 

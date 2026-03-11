@@ -42,7 +42,8 @@ type Table struct {
 		LastPageId uint32,
 		LastFramePageId uint32,
 		bufferpool BufferPool,
-    Index  map[string]*Index, 
+    Index  map[string]*Index,
+		WAL *WalManager,
 }
 
 func (db *Database_Manager) createTable(name string, columns []Column) Table{
@@ -77,14 +78,6 @@ func (tb *Table) writeFsm(pageId, freeBytes uint16) bool{
 	tb.bufferpool.SavePage(tableId, page)
 }
 
-func (tb *Table) insert(row string) RowId{
-	 page := tb.bufferpool.FittingPage(tb.tableId, len(row))
-	 pageId, SlotId := page.insert_row(row)
-	 tb.bufferpool.MarkDirty(tb.tableId, page.PageID)
-
-	 return &RowId{pageId, SlotId}
- }
-
 func (tb *Table) deleteTable(){
 	tb.bufferpool.DeleteTableById(tb.tableId)
 }
@@ -102,7 +95,23 @@ func (tl *Table) close_table(){
 }
 
 func (t *Table) Insert(row string) {
-	ptr := t.insertRow(row)
+   page := tb.bufferpool.FittingPage(tb.tableId, len(row))
+
+	 rec := &WalRecord{
+		 TableId: t.TableName,
+		 PageId: page.PageId,
+		 Operation: WAL_INSERT,
+		 DataSize: len(row),
+		 Data: []byte(row),
+	 }
+
+	 lsn := t.WAL.Log(&rec)
+	 //the normal transaction flow can resume after wal being prioritized
+	 page.PageLSN = lsn
+	 pageId, SlotId := page.insert_row(row)
+	 tb.bufferpool.MarkDirty(tb.tableId, page.PageID)
+
+	 ptr := &RowId{pageId, SlotId}
 
 	for col, idx := range t.Indexes.indexes {
 
@@ -112,8 +121,28 @@ func (t *Table) Insert(row string) {
 	}
 }
 
-func extractColumnValue(row string, col string){
+func extractColumnValue(row string, col string) interface{} {
 
+    parts := strings.Split(row, ",")
+
+    pos, colType := findColumnPosAndType(col)
+
+    value := parts[pos]
+
+    switch colType {
+
+    case INT:
+        v, _ := strconv.Atoi(value)
+        return int32(v)
+
+    case BOOLEAN:
+        return value == "true"
+
+    case STRING:
+        return value
+    }
+
+    return nil
 }
 
 func (tb *Table)findColumnPosAndType(col string) (bool, int, ColumnType){
@@ -161,6 +190,36 @@ func (tb *Table) CreateIndex(name string, column string) {
 	tb.Index[column] = index
 }
 
+func (tb *Table) buildIndex(idx *Index) {
+
+    for pageId := uint32(0); pageId <= tb.LastPageId; pageId++ {
+
+        page := tb.bufferpool.FetchPage(tb.TableId, pageId)
+
+        header := page.read_header()
+
+        for slot := 0; slot < int(header.rowCount); slot++ {
+
+            if page.isSlotDead(slot) {
+                continue
+            }
+
+            row := page.read_row(slot)
+
+            key := extractColumnValue(row, idx.Column)
+
+            encoded := EncodeKey(key, idx.MemTree.IndexHeader.KeyType)
+
+            ptr := RowId{
+                PageId: pageId,
+                SlotId: uint16(slot),
+            }
+
+            idx.MemTree.Insert(encoded, ptr)
+        }
+    }
+}
+
 func (t *Table) FindByIndex(column string, key []byte) *Row {
 
 	idx := t.Indexes.indexes[column]
@@ -205,5 +264,6 @@ func encodeInt(v int32) []byte {
 func encodeInt64(v int64) []byte{
 	buf :make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(v))
+	return buf
 }
 
