@@ -1,21 +1,21 @@
 package myDatabase
+import(
+	"/catalog/CatalogManager"
+	"os"
+)
 
+//installation path holder
+const DBInstallationPath = ""
 type Database_Manager struct{
-	dbName string,
-	dbPath string,
+	dbName string
+	dbPath string
 	BufferPool BufferPool
-	Tables map[string]*Table,
+	Catalog *CatalogManager,
 	Pager *Pager
 }
 
-func (db *Database_Manager) CreateDatabase(name string) string{
- wd, e := os.Getwd()
- if e !=nil{
-	 log.Printf("Cannot get working dir, error %v",e)
-	 return
- }
-
- dbPath := wd + name
+func (db *Database_Manager) CreateDatabase(name string) bool{
+ dbPath := DBInstallationPath + name
  //i cannot ascertain as of now whether the ModeDir is really used corectly to create dir
  err := os.Mkdir(dbPath, fs.ModeDir)
  if err !=nil{
@@ -32,11 +32,13 @@ func (db *Database_Manager) CreateDatabase(name string) string{
  //The problem as i realised is that meta and other informational data required by db can be written into db but need special ways to decode it back to the meaningful info for the system unlike user rows which are really naked and direct
  //unfished logic for persisting the db's metadata
  f.Write()
- return string dbPath
+
+ if !db.Catalog.NewCatalog(dbPath){log.Printf("Could not create catalog for the database, fatal database cannot lack metadata!") return false}
+ return true
 }
 
 func OpenDatabase(name string) *Database_Manager{
- 	lookPath := os.Getwd() + "/"+name
+ 	lookPath := DBInstallationPath + "/"+name
 
 	f, err := os.Open(lookPath+".meta")
 	if err !=nil{
@@ -53,8 +55,8 @@ func OpenDatabase(name string) *Database_Manager{
 	pgr := Pager{}
 	//then fillback the Database_Manager struct
 	return &Database_Manager{
-		dbName: ,
-		dbPath: ,
+		dbName: name,
+		dbPath: lookPath,
 		Tables: make(map[string]*Table, 3)
 		Pager: &Pgr
 	}

@@ -17,14 +17,17 @@ type ColumnTypeSZ uint16
 type columnNameLengthSZ uint16 
 
 const(
-	INT ColumnType = iota
-	STRING 
-	BOOLEAN
+	BOOLEAN ColumnType = iota
+	INT
+	STRING
 )
+
+const SEPARATOR = ","
 
 type Column struct{
 	columnName string
 	columnType ColumnType
+	nullable bool
 }
 
 type Schema struct{
@@ -82,8 +85,41 @@ func (tb *Table) deleteTable(){
 	tb.bufferpool.DeleteTableById(tb.tableId)
 }
 
-func (tl *Table) read(){
+func (tl *Table) read(pageId uint32) []string{
+	rows := make([]string, 0)
+	filename := tl.TableName +".tbl"
+	pg := tl.BufferPool.fetch_page(pageId, filename)
 
+	header := pg.header()
+	for i :=0; i<header.rowCount; i++{
+		row := pg.read_row(i)
+		rows = append(rows, row)
+	}
+
+	return rows
+}
+
+func (tl *Table) Scan(windowScanPages uint8, chan c []string){
+	scanLimit := 4096 * scanSize
+	if scanLimit/1000 > 100{
+		scanLimit = 4096 * 200
+	}
+
+	table_rows := make([]string, scanLimit)
+	for p := 0; p<=int(tl.LastPageId); p++{
+		p_rows := tl.read(p)
+		table_rows = append(table_rows, p_rows...)
+
+		if len(table_rows) >= scanLimit{
+			c <- table_rows
+
+			table_rows = make([]string, 0, scanLimit)
+		}
+	}
+
+	if len(table_rows)>0{
+		c <- table_rows
+	}
 }
 
 func (tl *Table) compact_table(){
@@ -94,21 +130,88 @@ func (tl *Table) close_table(){
 
 }
 
+func (tl *Table) SerializeColumns(row string) []byte{
+  parts := strings.Split(row, SEPARATOR)
+	cols := tl.TableSchema.columns
+
+	buf := make([]byte, 0)
+	for pos, col := range parts{
+		val := parts[pos]
+
+		switch col.ColumnType{
+		case BOOLEAN:
+			if strings.ToLower(val) == "true"{
+				buf = append(buf, byte(1))
+			}else{
+				buf = append(buf, byte(1))
+			}
+		case INT:
+			v, _ := strings.strconv.Atoi(val)
+			tmp := make([]byte, 4)
+			binary.LittleEndian.PutUint32(tmp, v)
+			buf = append(buf, tmp)
+		case STRING:
+			strBytes := []byte(val)
+			col_len := make([]byte, 2)
+			binary.LittleEndian.PutUint16(col_len, len(strBytes))
+			buf = append(buf, col_len...)
+			buf = append(buf, strBytes...)
+		}
+	}
+	return buf
+}
+
+func (tl *Table) DeserializeColumns(rowBytes []byte) string{
+	cols := tl.TableSchema.columns
+	offset := 0
+
+	var rowString string
+	for col_pos, col : range cols{
+		col_val := ""
+		switch col.ColumnType{
+		case BOOLEAN:
+			value := rowBytes[offset:offset+1]
+			if value ==1{
+				col_value = "true"
+			}else{
+				col_value = "false"
+			}
+
+			offset += 1
+		case INT:
+			value := rowBytes[offset:offset+4]
+			col_value = uint32(value)
+
+			offset += 4
+		case STRING:
+			str_len := rowBytes[offset:offset+2]
+			offset += 2
+			col_value + string(rowBytes[offset:offset+str_len])
+		}
+
+		//building back my user facing string
+		rowString = rowString+ SEPARATOR + col_value
+	}
+
+	return rowString
+}
+
 func (t *Table) Insert(row string) {
-   page := tb.bufferpool.FittingPage(tb.tableId, len(row))
+	 row_bytes := t.SerializeColumns(row)
+   page := tb.bufferpool.FittingPage(tb.tableId, len(row_bytes))
 
 	 rec := &WalRecord{
 		 TableId: t.TableName,
 		 PageId: page.PageId,
 		 Operation: WAL_INSERT,
-		 DataSize: len(row),
-		 Data: []byte(row),
+		 DataSize: len(row_bytes),
+		 Data: row_data,
 	 }
 
 	 lsn := t.WAL.Log(&rec)
 	 //the normal transaction flow can resume after wal being prioritized
 	 page.PageLSN = lsn
-	 pageId, SlotId := page.insert_row(row)
+	 pageId, SlotId := page.insert_row(row_bytes)
 	 tb.bufferpool.MarkDirty(tb.tableId, page.PageID)
 
 	 ptr := &RowId{pageId, SlotId}
@@ -123,7 +226,7 @@ func (t *Table) Insert(row string) {
 
 func extractColumnValue(row string, col string) interface{} {
 
-    parts := strings.Split(row, ",")
+    parts := strings.Split(row, SEPARATOR)
 
     pos, colType := findColumnPosAndType(col)
 
@@ -265,5 +368,9 @@ func encodeInt64(v int64) []byte{
 	buf :make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(v))
 	return buf
+}
+
+func (tbl *Table) Scan(){
+
 }
 

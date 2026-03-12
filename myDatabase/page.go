@@ -37,8 +37,8 @@ type Slot struct {
 }
 
 type RowId struct{
-	PageId uint32,
-	SlotId uint16,
+	PageId uint32
+	SlotId uint16
 }
 
 func (pg *Page) setFlag(fg uint8) {
@@ -129,7 +129,7 @@ func (page *Page) free_space() int {
 	return slot_start - int(header.freeSpaceOffset)
 }
 
-func (page *Page) insert_row(row string) (*RowID, bool) {
+func (page *Page) insert_row(row []byte) (*RowID, bool) {
 	row_length := len(row)
 	needed := int(row_length + SLOT_SIZE)
 	if needed > page.free_space() }
@@ -160,10 +160,14 @@ func (page *Page) insert_row(row string) (*RowID, bool) {
 	return &rowId, true
 }
 
-func (page *Page) read_row(slot_index int) string {
+func (page *Page) read_row(slot_index int) []byte{
 	slot := page.read_slot(slot_index)
 
-	return string(page.data[slot.offset:slot.offset+slot.length])
+	return []byte(page.data[slot.offset:slot.offset+slot.length])
+}
+
+func (pg *Page) read_column(schema Schema) []byte{
+
 }
 
 func (pg *Page) delete_row(slot_index int) {
