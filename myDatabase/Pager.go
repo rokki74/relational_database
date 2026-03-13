@@ -72,46 +72,6 @@ func (pgr *Pager) GetPage(tableFileName string, pageId uint32) Page{
 	return page
 }
 
-func (pg *Page) compact_slots(temp_page *Page){
-	
-	log.Println("Compacting slots of %v", pg.pageId) 
-	header := pg.read_header()
-
-	cursor := 0
-	totalSlots := int(header.rowCount)
-	for chunk:=0; chunk < 8; chunk++{
-		word :=binary.LittleEndian.Uint64(
-			header.slotBitMap[chunk*8: (chunk+1)*8]
-		)
-    
-		for word !=0{
-				tz : bits.TrailingZeros64(word)
-				dead_index := chunk*8 + tz 
-
-				if dead_index > totalSlots{
-					break
-				}
-
-				for cursor<dead_index{
-					temp_page.insert_row(pg.read_row(cursor))
-					cursor++
-				}
-
-				cursor = dead_index+1
-
-				//clear lowest set bit 
-				word &= word -1
-	  }
-  }
-
-	for cursor<totalSlots{
-		temp_page.insert_row(pg.read_row(cursor))
-		cursor ++
-	}
-
-	 log.Println("Done![===] compacting slots of %v", pg.pageId) 
-}
-
 func (pgr *Pager) DeleteTable(tableFileName string) bool{
 	fileName := pgr.dbPath +tableFileName+".tbl"
 	err := os.Remove(filename)

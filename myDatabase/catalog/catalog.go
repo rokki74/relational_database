@@ -63,15 +63,57 @@ func (clg *CatalogManager) LoadTables() bool{
 }
 
 func (clg *CatalogManager) parseTableMeta(row_data string) *TableCata{
-	tableName := 
-	lastPageId :=
-	schema := 
-
-	TableCata := TableCata{
-		TableName: tableName,
-		LastPageId: lastPageId,
-		TableSchema: schema,
+	
+	myDatabase.Column{
+		columnName: 
+		columnType: 
+		nullable: false,
 	}
+	table.TableSchema := 
+	c chan *[]myDatabase.Page
+	table.Scan(8, c)
+
+	tableMetas := make([]TableCata,0)
+	for data := range c{
+		pg := myDatabase.Page{}
+		pg.data = data
+
+		header := pg.read_header()
+		for r := 0; r<=header.rowCount;r++{
+			table := myDatabase.Table{}
+			tableSchema := myDatabase.Schema{}
+			tableSchema.columns := make([]myDatabase.Column,0)
+
+			nameColumn := myDatabase.Column{
+				columnName: "tableName",
+				columType: myDatabase.ColumnType.STRING,
+				nullable: false,
+			}
+			lastPageIdColumn := myDatabase.Column{
+				columnName: "lastPageId",
+				columnType: myDatabase.ColumnType.INT,
+				nullable: false,
+			}
+			tableSchema.columns = append(tableSchema.columns, nameColumn)
+      tableSchema.columns = append(tableSchema.columns, lastPageIdColumn)
+
+			//how to read out the rest of the array now as this should have the schema for the actual table columns
+			
+
+			tableName := 
+			lastPageId :=
+			schema := 
+
+			TableCata := TableCata{
+				TableName: tableName,
+				LastPageId: lastPageId,
+				TableSchema: schema,
+			}
+
+			tableMetas = append(tableMetas, &TableCata)
+		}
+
+  }
 }
 
 func (clg *CatalogManager) PurgeTable(){

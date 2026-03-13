@@ -2,6 +2,7 @@ package myDatabase
 
 import (
 	"encoding/binary"
+	"math/bits"
 )
 
 const PAGE_SIZE = 4096
@@ -166,13 +167,45 @@ func (page *Page) read_row(slot_index int) []byte{
 	return []byte(page.data[slot.offset:slot.offset+slot.length])
 }
 
-func (pg *Page) read_column(schema Schema) []byte{
-
-}
-
 func (pg *Page) delete_row(slot_index int) {
 	pg.killSlotIndex(slot_index)
 	pg.setFlag(PAGE_FLAG_LOOSE)
 }
 
+func (pg *Page) compact_slot(tempPage *Page){
+	header := pg.read_header()
+	log.Printf("Compacting slots of %v", header.pageId)
 
+	cursor := 0
+	totalSlots :=int(header.rowCount)
+	for chunk:=0; chunk<8; chunk++{
+		word := binary.LittleEndian.Uint64(
+			header.slotBitMap[chunk*8: (chunk+1)*8]
+		)
+
+		for word !=0{
+			tz := bits.TrailingZeros(word)
+			dead_index := chunk*8 +tz
+
+			if dead_index > totalSlots{
+				break
+		}
+
+		cursor <totalSlots{
+			tempPage.insert_row(pg.read_row(cursor))
+			cursor++
+		}
+
+		log.Println("Done![===] compacting the slots of %v", header.PageId)
+	}
+
+
+
+
+
+
+
+
+
+	
+}

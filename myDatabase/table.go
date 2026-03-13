@@ -35,18 +35,18 @@ type Schema struct{
 }
 
 type FsmEntry struct{
-	PageId uint32,
-	freeBytes uint16,
+	PageId uint32
+	freeBytes uint16
 }
 
 type Table struct {
-    TableName       string,
-		TableSchema Schema,
-		LastPageId uint32,
-		LastFramePageId uint32,
-		bufferpool BufferPool,
-    Index  map[string]*Index,
-		WAL *WalManager,
+    TableName string
+		TableSchema Schema
+		LastPageId uint32
+		LastFramePageId uint32
+		bufferpool BufferPool
+    Index  map[string]*Index
+		WAL *WalManager
 }
 
 func (db *Database_Manager) createTable(name string, columns []Column) Table{
@@ -64,7 +64,7 @@ func (db *Database_Manager) createTable(name string, columns []Column) Table{
 	if pgr.SaveTable(*table, db.dbPath){
 		return table
 	}
-} 
+}
 
 //After a scan get the pageId's that are free and by how many bytes then parse to this function to write to the fsm 
 func (tb *Table) writeFsm(pageId, freeBytes uint16) bool{
@@ -86,7 +86,7 @@ func (tb *Table) deleteTable(){
 }
 
 func (tl *Table) read(pageId uint32) []string{
-	rows := make([]string, 0)
+	rows := make([]byte, 0)
 	filename := tl.TableName +".tbl"
 	pg := tl.BufferPool.fetch_page(pageId, filename)
 
@@ -99,26 +99,26 @@ func (tl *Table) read(pageId uint32) []string{
 	return rows
 }
 
-func (tl *Table) Scan(windowScanPages uint8, chan c []string){
-	scanLimit := 4096 * scanSize
-	if scanLimit/1000 > 100{
-		scanLimit = 4096 * 200
+func (tl *Table) Scan(ScanPages uint8, c chan *[]Page ){
+	if scanPages >10{
+		ScanPages =10
 	}
 
-	table_rows := make([]string, scanLimit)
+	table_pages := make([]Page, ScanPages)
 	for p := 0; p<=int(tl.LastPageId); p++{
-		p_rows := tl.read(p)
-		table_rows = append(table_rows, p_rows...)
+		pg := Page{}
+		pg.data = tl.read(p)
+		table_pages = append(table_pages, pg)
 
-		if len(table_rows) >= scanLimit{
-			c <- table_rows
+		if len(table_pages) >= int(ScanPages){
+			c <- &table_pages
 
-			table_rows = make([]string, 0, scanLimit)
+			table_pages = make([]Page, 0, scanLimit)
 		}
 	}
 
-	if len(table_rows)>0{
-		c <- table_rows
+	if len(table_pages)>0{
+		c <- &table_pages
 	}
 }
 
@@ -142,11 +142,14 @@ func (tl *Table) SerializeColumns(row string) []byte{
 		case BOOLEAN:
 			if strings.ToLower(val) == "true"{
 				buf = append(buf, byte(1))
+				buf = append(buf, byte(1))
 			}else{
+				buf = append(buf, 1)
 				buf = append(buf, byte(1))
 			}
 		case INT:
 			v, _ := strings.strconv.Atoi(val)
+			buf = append(buf, len(v))
 			tmp := make([]byte, 4)
 			binary.LittleEndian.PutUint32(tmp, v)
 			buf = append(buf, tmp)
