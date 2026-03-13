@@ -9,6 +9,10 @@ import (
 const cat_tables_file = "sys_tables.tbl"
 const cat_indexes_file = "sys_indexes.tbl"
 
+const lenOffset = 1 
+const typeOffset = 1
+const lastPageIdLen := 4 
+
 type TableCata struct{
 	TableName string
 	LastPageId uint32
@@ -35,7 +39,6 @@ func (clg *CatalogManager) NewCatalog(fullDBPath string) bool{
 }
 
 func (clg *CatalogManager) LoadTables() bool{
-	clg.Tables := make(map[string]*myDatabase.Table)
 	f, err := os.Open(cat_tables_file)
 	if err != nil{
 		log.Printf("Cannot load tables due to, %v", err)
@@ -62,8 +65,9 @@ func (clg *CatalogManager) LoadTables() bool{
 	  }
 }
 
-func (clg *CatalogManager) parseTableMeta(row_data string) *TableCata{
+func (clg *CatalogManager) parseTableMeta(row_data string) []TableCata{
 	
+	clg.Tables := make(map[string]*myDatabase.Table)
 	myDatabase.Column{
 		columnName: 
 		columnType: 
@@ -83,37 +87,78 @@ func (clg *CatalogManager) parseTableMeta(row_data string) *TableCata{
 			table := myDatabase.Table{}
 			tableSchema := myDatabase.Schema{}
 			tableSchema.columns := make([]myDatabase.Column,0)
+      
+			currOffset := 0
+			tableNameLen := uint8(r[currOffset:currOffset+lenOffset])
+			currOffset += lenOffset
 
-			nameColumn := myDatabase.Column{
-				columnName: "tableName",
-				columType: myDatabase.ColumnType.STRING,
-				nullable: false,
+			tableName := string(r[currOffset:currOffset+tableNameLen])
+			currOffset += tableNameLen
+			lastPageId := uint32(r[currOffset:currOffset+lastPageIdLen])
+			currOffset := currOffset += lastPageIdLen
+
+			//The next data bytes have two preceeding meta before them len and type both 1 bytes as the catalogs needed to track themselves here unlike my normal user tables 
+			//where columns or rather schema begins is an extra byte to inform how many cols there are
+			totalCols := uint8(r[currOffset:currOffset+1])
+			currOffset +=1
+
+			schema := myDatabase.Schema{}
+			schemaCols := make([]myDatabase.Column, 0)
+			for colNo := 1; colNo <= totalCols; colNo++{
+				colLen := uint8(r[currOffset:currOffset+lenOffset])
+				currOffset += lenOffset
+				colType := uint8(r[currOff:currOffset+typeOffset])
+				currOffset += typeOffset
+	      
+				switch colType{
+				case 1:
+					//haha i previously read it into an int then i was struggling to find the column name, realized it was like i was using two columnTypes separately yet it was meant the first offset to infer the column type already
+					colName := string(r[currOffset:currOffset+colLen])
+					currOffset += colLen
+
+					column := Column{
+						columnName : colName,
+						columnType : myDatabase.BOOLEAN,
+						nullable : false,
+					}
+				
+					schemaCols = append(schemaCols, column)
+
+				case 2:
+					colName := string(r[currOffset:currOffset+colLen])
+					currOffset += colLen
+
+					column := Column{
+						columnName : colName,
+						columnType : myDatabase.INT,
+						nullable : false,
+					}
+					schemaCols = append(schemaCols, column)
+
+				case 3:
+					colName := string(r[currOffset:currOffset+colLen])
+					currOffset += colLen
+
+					column := Column{
+						columnName: colName,
+						columnType: myDatabase.STRING,
+						nullable: false,
+					}
+					schemaCols = append(schemaCols, column)
+				}
 			}
-			lastPageIdColumn := myDatabase.Column{
-				columnName: "lastPageId",
-				columnType: myDatabase.ColumnType.INT,
-				nullable: false,
-			}
-			tableSchema.columns = append(tableSchema.columns, nameColumn)
-      tableSchema.columns = append(tableSchema.columns, lastPageIdColumn)
 
-			//how to read out the rest of the array now as this should have the schema for the actual table columns
-			
-
-			tableName := 
-			lastPageId :=
-			schema := 
-
-			TableCata := TableCata{
+			schema.columns = schemaCols
+			tableCata := TableCata{
 				TableName: tableName,
 				LastPageId: lastPageId,
 				TableSchema: schema,
 			}
 
-			tableMetas = append(tableMetas, &TableCata)
+			tableMetas = append(tableMetas, &tableCata)
 		}
-
   }
+	return tableMetas
 }
 
 func (clg *CatalogManager) PurgeTable(){

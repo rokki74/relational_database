@@ -130,7 +130,7 @@ func (tl *Table) close_table(){
 
 }
 
-func (tl *Table) SerializeColumns(row string) []byte{
+func (tl *Table) SerializeColumn(row string) []byte{
   parts := strings.Split(row, SEPARATOR)
 	cols := tl.TableSchema.columns
 
