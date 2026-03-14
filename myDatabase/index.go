@@ -6,14 +6,14 @@ import(
 type IndexHeader struct {
     RootPageId uint32
     TotalPages uint32
-    ColumnPos  uint32//for extraction using parts[idx.ColumnPos] instead of a full schema lookup
+    ColumnPos  uint32//for extraction using parts[idx.ColumnPos]
     IsUnique   bool
     KeyType    ColumnType
 }
 
 type Index struct {
 	Name string
-	Column string
+	ColumnPos uint8
 	TableId uint16
   FileName string
 	MemTree *BPlusTree
@@ -23,6 +23,7 @@ type BPlusTree struct {
 	IndexHeader *IndexHeader
 	BufferPool *BufferPool
 }
+
 
 type IndexEntry struct {
 	Key []byte
@@ -48,7 +49,7 @@ type InternalNode struct {
 	Children []uint32
 }
 
-type LeafNode struct{
+type LeafNode struct {
 	Header NodeHeader
 	//bytes.Compare
 	Keys   [][]byte
@@ -57,6 +58,7 @@ type LeafNode struct{
 }
 
 func (tree *BPlusTree) Search(key []byte) *RowId {
+
 	node := tree.findLeaf(key)
 
 	for i, k := range node.Keys {

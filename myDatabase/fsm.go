@@ -7,14 +7,22 @@ import(
 )
 
 type FSMManager struct{
-   FsmFile: *os.File
+   FsmFile: string
 }
 
-func (fsm *FSMManager) save(fsmPageId uint32){
-   offset := fsmPageId * 4096
+type FSMData struct{
+	PageId uint32,
+	FreeBytes uint16,
+	NextFsmPage uint32,
+}
 
-	 f := fsm.FsmFile
-	 f.WriteAt(offset)
+func (fsm *FSMManager) Save(fsmPage Page){
+	pager := Pager{}
+	pager.WritePage(fsm.FsmFile, fsmPage)
+}
+
+func (fsm *FSMManager) fetchFreeTableFsm(tableFile string, neededLength uint64){
+	
 }
 
 

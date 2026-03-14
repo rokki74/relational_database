@@ -89,3 +89,7 @@ func (bf *BufferPool) MarkDirty(fileName string, pageId uint32{
 	bf.frames[bufKey].Dirty = true
 }
 
+func (bf *BufferPool) FittingPage(tableFile string, length uint8){
+
+}
+

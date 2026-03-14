@@ -16,6 +16,7 @@ const lastPageIdLen := 4
 type TableCata struct{
 	TableName string
 	LastPageId uint32
+	FirstFramePageID uint32
 	TableSchema myDatabase.Schema
 }
 
@@ -28,6 +29,7 @@ type IndexCata struct{
 
 type CatalogManager struct{
 	Tables map[string]myDatabase.Table
+	
 }
 
 func (clg *CatalogManager) NewCatalog(fullDBPath string) bool{
@@ -38,44 +40,56 @@ func (clg *CatalogManager) NewCatalog(fullDBPath string) bool{
 	return true
 }
 
-func (clg *CatalogManager) LoadTables() bool{
-	f, err := os.Open(cat_tables_file)
-	if err != nil{
-		log.Printf("Cannot load tables due to, %v", err)
-		return false
+func (clg *CatalogManager) LoadIndexMeta() map[string]*IndexCata{
+	c chan *[]myDatabase.lastPageId
+	clg.ScanFile(cat_indexes_file, 8, c)
+	indexMetas := make(map[string]*IndexCata)
+	for data := range c{
+	  pg := Page{}
+		pg.data = data
+
+		header := pg.read_header()
+		currOffset := 0
+		for r := 0; r <= header.rowCount; r++{
+		  table := myDatabase.Table{}
+			tableSchema := myDatabase.Schema{}
+			tableSchema.columns := make([]myDatabase.Column,0)
+
+      indexFileLen := uint8(r[currOffset: currOffset+1])
+		  currOffset += 1
+			indexFile := string(r[currOffset: currOffset+indexFileLen])
+			currOffset += indexFileLen
+			indexNameLen := uint8(r[currOffset: currOffset+1])
+			currOffset += 1
+			indexName := string(r[currOffset:currOffset+indexNameLen])
+			currOffset += indexNameLen
+			indexedTableLen := uint8(r[:currOffset+indexNameLen])
+			currOffset += 1
+			indexedTable := string(r[currOffset:currOffset+indexedTableLen])
+			currOffset += indexedTableLen
+			columnPos := uint8(r[:currOffset+1])
+
+			indexCata := IndexCata{
+			   IndexFile: indexFile,
+				 IndexName: indexName,
+				 IndexedTable: indexedTable,
+				 ColumnPos: columnPos,
+			}
+
+      indexMetas = append(indexMetas, &indexCata)
+		}
 	}
 
-    pg myDatabase.Page := Page{}
-		for nextBuf := 4096; readOffset, err := f.ReadAt(&pg.data, int64(nextBuf)){
-			if err !=nil{
-				if err == io.EOF{
-					log.Printf("End of file")
-					return
-				} 
-				return
-			}
-
-			header := pg.read_header()
-			for rowC := 0; rowC < header.rowCount{
-				row_data := pg.read_row(rowC)
-				tableCata := parseTableMeta(row_data)
-				clg.Tables := append(clg.Tables, *tableCata)
-			}
-		  nextBuf = nextbuf + 4096
-	  }
+	return &indexMetas
 }
 
-func (clg *CatalogManager) parseTableMeta(row_data string) []TableCata{
-	
+
+func (clg *CatalogManager) LoadTableMeta() []TableCata{
+  indexMetasMap := clg.LoadIndexMeta()
 	clg.Tables := make(map[string]*myDatabase.Table)
-	myDatabase.Column{
-		columnName: 
-		columnType: 
-		nullable: false,
-	}
-	table.TableSchema := 
+	
 	c chan *[]myDatabase.Page
-	table.Scan(8, c)
+	clg.ScanFile(cat_tables_file, 8, c)
 
 	tableMetas := make([]TableCata,0)
 	for data := range c{
@@ -96,6 +110,7 @@ func (clg *CatalogManager) parseTableMeta(row_data string) []TableCata{
 			currOffset += tableNameLen
 			lastPageId := uint32(r[currOffset:currOffset+lastPageIdLen])
 			currOffset := currOffset += lastPageIdLen
+			firstFramePageId := uint32(r[currOffset:currOffset+lastPageIdLen])
 
 			//The next data bytes have two preceeding meta before them len and type both 1 bytes as the catalogs needed to track themselves here unlike my normal user tables 
 			//where columns or rather schema begins is an extra byte to inform how many cols there are
@@ -148,11 +163,20 @@ func (clg *CatalogManager) parseTableMeta(row_data string) []TableCata{
 				}
 			}
 
+      indexCata := indexMetas[tableName]
+      index := Index{
+			   Name: indexCata.IndexName,
+				 FileName: indexCata.IndexFileName,
+				 ColumnPos: indexCata.ColumnPos,
+			}
 			schema.columns = schemaCols
+
 			tableCata := TableCata{
 				TableName: tableName,
 				LastPageId: lastPageId,
+				FirstFramePageID: firstFramePageId,
 				TableSchema: schema,
+				Index: 
 			}
 
 			tableMetas = append(tableMetas, &tableCata)
@@ -161,10 +185,42 @@ func (clg *CatalogManager) parseTableMeta(row_data string) []TableCata{
 	return tableMetas
 }
 
+
 func (clg *CatalogManager) PurgeTable(){
 
 }
 
+func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan *[]Page ) bool{
+	if scanPages >10{
+		ScanPages =10
+	}
 
+	table_pages := make([]Page, ScanPages)
+	f, err := os.open(fileName)
+	if err != nil{
+		log.Printf("Error reading catalog table, ", err)
+		return false
+	}
+	for {
+		pg := Page{}
+		pg.data := make([]byte, 4096) 
+		n, err := f.Read(pg.data)
+		if err != nil{
+			log.Printf("Error occured reading file, %v", err)
+			if err ==io.EOF{
+				c <- &table_pages
+				return
+			}
+		}
+
+		table_pages = append(table_pages, pg)
+
+		if len(table_pages) >= int(ScanPages){
+			c <- &table_pages
+
+			table_pages = make([]Page, 0, scanLimit)
+		}
+	}
+}
 
 

@@ -47,7 +47,7 @@ func (pgr *Pager) SaveTable(table *Table) string{
 	return filename
 }
 
-func (pgr *Pager) WritePage(tableFileName string, pageId uint32) bool{
+func (pgr *Pager) WritePage(tableFileName string, page Page) bool{
 	dbPath := pgr.db.dbPath
 	f, err := os.Open(dbPath+tableFileName)
 	if err != nil{
@@ -55,7 +55,7 @@ func (pgr *Pager) WritePage(tableFileName string, pageId uint32) bool{
 		return false
 	}
 
-	f.write(page)
+	f.writeAt(pageId*4096, page)
 	return true
 }
 

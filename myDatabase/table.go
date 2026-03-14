@@ -43,7 +43,7 @@ type Table struct {
     TableName string
 		TableSchema Schema
 		LastPageId uint32
-		LastFramePageId uint32
+		FirstFramePageId uint32
 		bufferpool BufferPool
     Index  map[string]*Index
 		WAL *WalManager
@@ -373,7 +373,4 @@ func encodeInt64(v int64) []byte{
 	return buf
 }
 
-func (tbl *Table) Scan(){
-
-}
 
