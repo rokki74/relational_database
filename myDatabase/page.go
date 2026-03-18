@@ -138,6 +138,7 @@ func (page *Page) insert_row(row []byte) (*RowID, bool) {
    }
 
 	header := page.read_header()
+	
 	//slot indices start from zero while row counts are really starting from 1 on the header
 	//thus can use the current to refer to index and later use it's increment to update the row rowCount
 	//in the header
@@ -196,7 +197,7 @@ func (pg *Page) compact_slot(tempPage *Page){
 			cursor++
 		}
 
-		log.Println("Done![===] compacting the slots of %v", header.PageId)
+		log.Println("Done![===], compacted the slots of %v", header.PageId)
 	}
 
 

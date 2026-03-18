@@ -2,28 +2,13 @@
 
 package myDatabase
 
-import(
-	"log"
-)
+type FSMData struct{
+	FSMPageId uint32
+	FSMMap map[uint32]uint16
+}
 
 type FSMManager struct{
-   FsmFile: string
+	FsmFile string
+	FSMData *FSMData
 }
-
-type FSMData struct{
-	PageId uint32,
-	FreeBytes uint16,
-	NextFsmPage uint32,
-}
-
-func (fsm *FSMManager) Save(fsmPage Page){
-	pager := Pager{}
-	pager.WritePage(fsm.FsmFile, fsmPage)
-}
-
-func (fsm *FSMManager) fetchFreeTableFsm(tableFile string, neededLength uint64){
-	
-}
-
-
 

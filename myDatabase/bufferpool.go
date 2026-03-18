@@ -18,9 +18,10 @@ type BufferPool struct{
 	frames: map[BufferKey]Frame,
 	capacity: uint,
 	tablesMap *Database_Manager.tablesMap
+	fsm: FSMManager
 }
 
-func (bf *BufferPool) fetch_page(pageId uint32, fileName string) Page{
+func (bf *BufferPool) FetchPage(pageId uint32, fileName string) Page{
 	bufKey := BufferKey{fileName, pageId}
 
 	frame,ok = bf.frames[bufKey]
@@ -89,7 +90,18 @@ func (bf *BufferPool) MarkDirty(fileName string, pageId uint32{
 	bf.frames[bufKey].Dirty = true
 }
 
-func (bf *BufferPool) FittingPage(tableFile string, length uint8){
+func (bf *BufferPool) FittingPage(tableFile string, length uint16)bool, uint32{
+	fsm :FSMManager{}
+	fsm.FsmFile = tableFile
 
+	fsms := bf.fsm.FSMData.FSMMap
+	for p, bts := ange bf.fsm.FSMData.FSMMap{
+		if bts >= uint64{
+			fmt.Printf("FOUND PAGE ID[p] to have accomodating free bytes returning..")
+			return true, p
+		}
+	}
+
+	return false
 }
 

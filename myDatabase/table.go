@@ -46,7 +46,7 @@ type Table struct {
 		FirstFramePageId uint32
 		bufferpool BufferPool
     Index  map[string]*Index
-		WAL *WalManager
+		TxnMngr *TransactionManager
 }
 
 func (db *Database_Manager) createTable(name string, columns []Column) Table{
@@ -199,19 +199,23 @@ func (tl *Table) DeserializeColumns(rowBytes []byte) string{
 	return rowString
 }
 
-func (t *Table) Insert(row string) {
-	 row_bytes := t.SerializeColumns(row)
-   page := tb.bufferpool.FittingPage(tb.tableId, len(row_bytes))
+func (tb *Table) Insert(row string) {
+	 txn : tb.TxnMngr.Begin()
+	 row_bytes := tb.SerializeColumns(row)
+   ok, pageId := tb.bufferpool.FittingPage(tb.tableId, len(row_bytes))
+	 if !ok{
+		 pageId = tb.LastPageId
+	 }
 
+	 page := tb.BufferPool.FetchPage(pageId)
 	 rec := &WalRecord{
-		 TableId: t.TableName,
+		 TableId: tb.TableName,
 		 PageId: page.PageId,
-		 Operation: WAL_INSERT,
 		 DataSize: len(row_bytes),
 		 Data: row_data,
 	 }
 
-	 lsn := t.WAL.Log(&rec)
+	 lsn := t.txnMngr.wal.LogInsert(&rec)
 	 //the normal transaction flow can resume after wal being prioritized
 	 page.PageLSN = lsn
 	 pageId, SlotId := page.insert_row(row_bytes)
@@ -219,12 +223,17 @@ func (t *Table) Insert(row string) {
 
 	 ptr := &RowId{pageId, SlotId}
 
-	for col, idx := range t.Indexes.indexes {
 
-		key := extractColumnValue(row, col)
+  if tb.Indexed{
+		for col, idx := range t.Indexes.indexes {
 
-		idx.Tree.Insert(key, ptr)
+			key := extractColumnValue(row, col)
+
+			idx.Tree.Insert(key, ptr)
+		}
 	}
+
+	tb.TxnMngr.Commit(txn)
 }
 
 func extractColumnValue(row string, col string) interface{} {

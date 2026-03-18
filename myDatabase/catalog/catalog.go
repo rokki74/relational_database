@@ -11,12 +11,11 @@ const cat_indexes_file = "sys_indexes.tbl"
 
 const lenOffset = 1 
 const typeOffset = 1
-const lastPageIdLen := 4 
+const lastPageIdLen = 4 
 
 type TableCata struct{
 	TableName string
 	LastPageId uint32
-	FirstFramePageID uint32
 	TableSchema myDatabase.Schema
 }
 

@@ -13,13 +13,13 @@ const(
 )
 
 type WalRecord struct{
-	LSN uint64,
-	PrevLSN uint64,
-	TableId uint64,
-	PageId uint32,
-	Operation uint8,
-	DataSize uint32,
-	Data []byte,
+	LSN uint64
+	PrevLSN uint64
+	TableId uint64
+	PageId uint32
+	Operation uint8
+	DataSize uint32
+	Data []byte
 }
 
 type WalManager struct{
