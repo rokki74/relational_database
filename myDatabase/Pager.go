@@ -30,6 +30,7 @@ func (pgr *Pager) SaveTable(table *Table) string{
 	//I shall later cross check if really os.Open creates a file if it didn't exist otherwise this code should be so functioning
 	filename := dbPath + table.TableName+".tbl"
 	f, err := os.Open(filename)
+	defer f.CLose()
 	if err != nil{
 		log.Printf("The table file for table: %v couldn't be created", table.TableName)
 		return 
@@ -50,6 +51,7 @@ func (pgr *Pager) SaveTable(table *Table) string{
 func (pgr *Pager) WritePage(tableFileName string, page Page) bool{
 	dbPath := pgr.db.dbPath
 	f, err := os.Open(dbPath+tableFileName)
+	defer f.Close()
 	if err != nil{
 		log.Print("Error could not write page")
 		return false
@@ -62,6 +64,7 @@ func (pgr *Pager) WritePage(tableFileName string, page Page) bool{
 func (pgr *Pager) GetPage(tableFileName string, pageId uint32) Page{
 	dbPath := pgr.dbdbPath
 	f, err := os.Open(dbPath+tableFileName)
+	defer f.Close()
 	if err != nil{
 		log.Print("Error could not write page")
 		return false

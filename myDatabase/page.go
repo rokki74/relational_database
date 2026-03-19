@@ -64,7 +64,7 @@ func (p *Page) killSlotIndex(slot int) {
 	p.data[BITMAP_OFFSET+byteIndex] |= (1 << bitIndex)
 }
 
-func (p *Page) isSlotDead(slot int) bool {
+func (p *Page) SlotDead(slot int) bool {
 	byteIndex := slot / 8
 	bitIndex := slot % 8
 	return (p.data[BITMAP_OFFSET+byteIndex] & (1 << bitIndex)) != 0

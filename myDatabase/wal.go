@@ -31,6 +31,7 @@ func NewWalManager(path string) *WalManager{
 	f, _ := os.OpenFile(path+"/wal.log",
 		os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 
+	defer f.Close()
 	return &WALManager{
 		file: f,
 		currentLSN: 0,

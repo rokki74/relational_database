@@ -10,7 +10,7 @@ type Database_Manager struct{
 	dbName string
 	dbPath string
 	BufferPool BufferPool
-	Catalog *CatalogManager,
+	Catalog *CatalogManager
 	Pager *Pager
 }
 
@@ -41,6 +41,7 @@ func OpenDatabase(name string) *Database_Manager{
  	lookPath := DBInstallationPath + "/"+name
 
 	f, err := os.Open(lookPath+".meta")
+	defer f.Close()
 	if err !=nil{
 		log.Printf("Could not open the database due to error %", err)
 		//Somehow the user needs to be getting these errors as the database is his and he himself/herself should be debbuging

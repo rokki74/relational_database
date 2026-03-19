@@ -4,6 +4,51 @@ import(
 	"fmt"
 )
 
+/* REFERENCE FOR IMPL
+The wal shld check that txn 12 has no commit record therefore undoes it wal.Undo(12) maintaining consistency
+Begin txn 12
+    ↓
+LogBegin
+    ↓
+Insert tuple
+    ↓
+LogInsert
+    ↓
+Insert tuple
+    ↓
+LogInsert
+    ↓
+Commit
+    ↓
+LogCommit
+    ↓
+Flush WAL
+    ↓
+Release locks
+
+So the transaction manager integrates with:
+table.Insert(txn, tuple)
+index.Insert(txn, key, rowPointer)
+bufferPool.MarkDirty(txn)
+
+tuple := BuildTuple(values)
+
+tuple.txnID = txnID
+
+pageID,slot := table.Insert(tuple)
+
+wal.LogInsert(txnID,pageID,slot,tuple)
+
+for each log record:
+
+    if INSERT:
+        if pageLSN < logLSN
+            redo
+
+    if COMMIT:
+        txnState = committed
+*/
+
 type TxnType int
 const (
 	BEGIN TxnType = iota
@@ -25,7 +70,6 @@ type Transaction struct{
 	ID: uint8
 	State: TxnState
 	StartLSN: uint32 
-	Locks: []Lock
 }
 
 type TransactionManager struct{
@@ -78,13 +122,19 @@ const (
 	EXCLUSIVE
 )
 
-type Lock struct{
-	Type LockType
-	Resource Resource 
-}
-
 type LockManager struct{
-
+	lockTable map[Resource]Lock
 }
 
+func (lm *LockManager) AddLock(id Transaction.Id){
+	/*what really is a Transaction should it have resources it is using maybe the pages it is writing etc?
+	so we just lock all its resources until it is committed/aborted? */
+	//add the lock
+	lm.lockTable
+}
+
+func (lm *LockManager) ReleaseLocks(id Transaction.ID){
+	//remove
+	delete(lm.lockTable, id)
+}
 

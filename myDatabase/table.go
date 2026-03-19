@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 )

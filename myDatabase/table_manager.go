@@ -12,6 +12,7 @@ type TblManager struct{
 }
 func init(){
   f := os.Open(TablesFile)
+	defer f.CLose()
 	tbl_manager := Tbl
 }
 func save_table(){

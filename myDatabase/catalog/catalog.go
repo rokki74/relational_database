@@ -195,7 +195,8 @@ func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan *[]
 	}
 
 	table_pages := make([]Page, ScanPages)
-	f, err := os.open(fileName)
+	f, err := os.Open(fileName)
+	defer f.Close()
 	if err != nil{
 		log.Printf("Error reading catalog table, ", err)
 		return false
