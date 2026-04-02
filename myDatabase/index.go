@@ -2,6 +2,7 @@ package myDatabase
 
 import(
 	"bytes"
+	"encoding/binary"
 )
 type IndexHeader struct {
     RootPageId uint32
@@ -20,10 +21,11 @@ type Index struct {
 }
 
 type BPlusTree struct {
+	TreePath *string
 	IndexHeader *IndexHeader
 	BufferPool *BufferPool
-}
 
+}
 
 type IndexEntry struct {
 	Key []byte
@@ -57,6 +59,32 @@ type LeafNode struct {
 	NextLeaf uint32
 }
 
+func (tree *BPlusTree) ReadIndexHeader() *IndexHeader{
+	indexHeader := &IndexHeader{}
+
+	page := tree.BufferPool.FetchPage(0, tree.TreePath)
+	
+	slot := page.read_slot(0)
+	offset := slot.offset
+
+	indexHeader.RootPageId = binary.LittleEndian.Uint32(page.data[offset:offset+4])
+	offset += 4
+	indexHeader.TotalPages = binary.LittleEndian.Uint32(page.data[offset:offset+4])
+	offset += 4
+	indexHeader.ColumnPos = binary.LittleEndian.Uint32(page.data[offset:offset+4])
+	offset += 4
+
+	copy(indexHeader.IsUnique, page.data[offset:offset+1])
+	offset += 1 
+
+	//Hoping the next piece was saved with the length of data first
+	keyTypeLen := uint8(page.data[offset:offset+1])
+	offset += 1
+	copy(indexHeader.KeyType, string(page.data[offset:offset+keyTypeLen]))
+
+	return indexHeader
+}
+
 func (tree *BPlusTree) Search(key []byte) *RowId {
 
 	node := tree.findLeaf(key)
@@ -72,7 +100,7 @@ func (tree *BPlusTree) Search(key []byte) *RowId {
 
 func (tree *BPlusTree) findLeaf(key []byte) *LeafNode {
 
-	page := tree.BufferPool.FetchPage(tree.TableId, tree.RootPageId)
+	page := tree.BufferPool.FetchPage(tree.IndexHeader.RootPageId, tree.TreePath)
 
 	node := deserializeNode(page)
 
@@ -90,7 +118,7 @@ func (tree *BPlusTree) findLeaf(key []byte) *LeafNode {
 
 		childPage := internal.Children[i]
 
-		page = tree.BufferPool.FetchPage(tree.TableId, childPage)
+		page = tree.BufferPool.FetchPage(childPage, tree.TreePath)
 
 		node = deserializeNode(page)
 	}
@@ -142,5 +170,17 @@ func (tree *BPlusTree) splitLeaf(leaf *LeafNode) {
 	leaf.Next = allocateNewPage()
 
 	tree.insertIntoParent(leaf, newLeaf.Keys[0], newLeaf)
+}
+
+func (index *Index) BuildMemTree(){
+	if index.MemTree != nil{
+		return
+	}
+
+	tree := &BPlusTree{}
+	tree.TreePath = &index.FileName
+  tree.IndexHeader = tree.ReadIndexHeader()
+
+	
 }
 

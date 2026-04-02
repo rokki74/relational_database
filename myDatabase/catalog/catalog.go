@@ -16,22 +16,28 @@ const lastPageIdLen = 4
 type TableCata struct{
 	TableName string
 	LastPageId uint32
+	FirstFramePageID uint32
 	TableSchema myDatabase.Schema
 }
 
 type IndexCata struct{
 	IndexFile string
 	IndexName string
-	IndexedTable string
 	ColumnPos uint8
 }
 
-type CatalogManager struct{
-	Tables map[string]myDatabase.Table
-	
+type CatalogEntry struct{
+	Tables map[string]*myDatabase.Table
+	IndexMetas map[string]*IndexCata
 }
 
-func (clg *CatalogManager) NewCatalog(fullDBPath string) bool{
+type CatalogManager struct{
+	Database string
+	CatalogEntry CatalogEntry
+}
+
+func (clg *CatalogManager) NewCatalog(systemPath string) bool{
+	fullDBPath := systemPath+"/"+clg.Database
 	_, err1 := os.Create(fullDBPath+cat_tables_file)
 	_, err2 := os.Create(fullDBPath+cat_indexes_file)
 
@@ -39,10 +45,12 @@ func (clg *CatalogManager) NewCatalog(fullDBPath string) bool{
 	return true
 }
 
-func (clg *CatalogManager) LoadIndexMeta() map[string]*IndexCata{
+func (clg *CatalogManager) LoadIndexMeta(systemPath string){
 	c chan *[]myDatabase.lastPageId
-	clg.ScanFile(cat_indexes_file, 8, c)
-	indexMetas := make(map[string]*IndexCata)
+	dbPath := systemPath+"/"+clg.Database +"/"
+
+	clg.ScanFile(dbPath+cat_indexes_file, 8, c)
+	clg.CatalogEntry.IndexMetas := make(map[string][]*IndexCata)
 	for data := range c{
 	  pg := Page{}
 		pg.data = data
@@ -50,10 +58,6 @@ func (clg *CatalogManager) LoadIndexMeta() map[string]*IndexCata{
 		header := pg.read_header()
 		currOffset := 0
 		for r := 0; r <= header.rowCount; r++{
-		  table := myDatabase.Table{}
-			tableSchema := myDatabase.Schema{}
-			tableSchema.columns := make([]myDatabase.Column,0)
-
       indexFileLen := uint8(r[currOffset: currOffset+1])
 		  currOffset += 1
 			indexFile := string(r[currOffset: currOffset+indexFileLen])
@@ -71,21 +75,38 @@ func (clg *CatalogManager) LoadIndexMeta() map[string]*IndexCata{
 			indexCata := IndexCata{
 			   IndexFile: indexFile,
 				 IndexName: indexName,
-				 IndexedTable: indexedTable,
 				 ColumnPos: columnPos,
 			}
 
-      indexMetas = append(indexMetas, &indexCata)
+			//incase a table had not just one indexes
+			catas := append(catas, indexCata)
+			clg.CatalogEntry.IndexMetas[indexedTable] = catas
 		}
 	}
-
-	return &indexMetas
 }
 
+func (clg *CatalogManager) BuildIndexesIntoTable(tableName string){
+	table := clg.CatalogEntry.Tables[tableName]
+	indexCatas := clg.CatalogEntry.IndexMetas[tableName]
+
+	table.Indexes := make([]Index, 0)
+	for i := 0; i<len(indexCatas); i++{
+		index := &Index{}
+
+		cata := indexCatas[i]
+
+		index.ColumnPos := cata.ColumnPos
+		index.FileName := cata.IndexFile
+		index.Name := cata.IndexFile
+    index.MemTree := index.BuildMemTree()
+
+		table.Indexes := append(indexes, index)
+	}
+}
 
 func (clg *CatalogManager) LoadTableMeta() []TableCata{
   indexMetasMap := clg.LoadIndexMeta()
-	clg.Tables := make(map[string]*myDatabase.Table)
+	clg.CatalogEntry.Tables := make(map[string]*myDatabase.Table)
 	
 	c chan *[]myDatabase.Page
 	clg.ScanFile(cat_tables_file, 8, c)
@@ -175,7 +196,6 @@ func (clg *CatalogManager) LoadTableMeta() []TableCata{
 				LastPageId: lastPageId,
 				FirstFramePageID: firstFramePageId,
 				TableSchema: schema,
-				Index: 
 			}
 
 			tableMetas = append(tableMetas, &tableCata)
@@ -184,6 +204,22 @@ func (clg *CatalogManager) LoadTableMeta() []TableCata{
 	return tableMetas
 }
 
+func (clg *CatalogManager) LoadCatalog(){
+	clg.CatalogEntry.Tables := make(map[string], 0)
+	clg.CatalogEntry.IndexMetas := clg.LoadIndexMeta()
+
+	tableMetas := clg.LoadTableMeta()
+	for tableMeta := tableMetas{
+		table := Table{
+			TableName : tableMeta.TableName,
+			LastPageId: tableMeta.LastPageId,
+			FirstFramePageID: tableMeta.LastFramePageId,
+			TableSchema: tableMeta.TableSchema,
+		}
+
+		clg.CatalogEntry.Tables[tableMeta.TableName] = &table
+	}
+}
 
 func (clg *CatalogManager) PurgeTable(){
 

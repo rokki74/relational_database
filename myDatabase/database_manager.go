@@ -1,4 +1,5 @@
 package myDatabase
+
 import(
 	"/catalog/CatalogManager"
 	"os"
@@ -38,7 +39,25 @@ func (db *Database_Manager) CreateDatabase(name string) bool{
 }
 
 func OpenDatabase(name string) *Database_Manager{
- 	lookPath := DBInstallationPath + "/"+name
+
+
+	//read back the meta, a very tricky aspect of the system, if i misread then it's misinformation and breakage!
+	//unfished implementation, how do i read back the metadata?
+	f.Read()
+  
+	pgr := Pager{}
+	
+	clgMngr := &CatalogManager{}
+	dbMngr := &Database_Manager{
+		dbName: name,
+		dbPath: lookPath,
+		Catalog: clgMngr.LoadCatalog(),
+		Pager: &Pgr,
+									}
+}
+
+func (db *Database_Manager) ReadDBMeta(){
+   	lookPath := DBInstallationPath + "/"+name
 
 	f, err := os.Open(lookPath+".meta")
 	defer f.Close()
@@ -47,19 +66,6 @@ func OpenDatabase(name string) *Database_Manager{
 		//Somehow the user needs to be getting these errors as the database is his and he himself/herself should be debbuging
 		//I therefore need a database error struct to store and return meaningful errors to user
 		return
-	}
-
-	//read back the meta, a very tricky aspect of the system, if i misread then it's misinformation and breakage!
-	//unfished implementation, how do i read back the metadata?
-	f.Read()
-  
-	pgr := Pager{}
-	//then fillback the Database_Manager struct
-	return &Database_Manager{
-		dbName: name,
-		dbPath: lookPath,
-		Tables: make(map[string]*Table, 3)
-		Pager: &Pgr
 	}
 }
 

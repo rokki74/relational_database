@@ -29,6 +29,7 @@ const (
 	INTO
 	WHERE
 	FROM
+	SET
 
   LT 
 	GT 
@@ -36,6 +37,8 @@ const (
 	GTE 
 	EQ
 	NEQ
+	OR
+	AND
 
 	EOF
 )
@@ -45,18 +48,18 @@ var keywords = map[string]TokenType{
     "INSERT": INSERT,
     "UPDATE": UPDATE,
     "DELETE": DELETE,
+    "CREATE": CREATE,
     "FROM":   FROM,
     "WHERE":  WHERE,
     "INTO":   INTO,
     "VALUES": VALUES,
-    "CREATE": CREATE,
     "ON":     ON,
 }
 
 type Lexer struct {
     input        string
-    position     int  // current position
-    readPosition int  // next position
+    leftPointer     int  // current position
+    rightPointer int  // next leftPointer
     ch           byte // current char
 }
 
@@ -72,20 +75,20 @@ func NewLexer(input string) *Lexer {
 }
 
 func (l *Lexer) readChar() {
-    if l.readPosition >= len(l.input) {
+    if l.rightPointer >= len(l.input) {
         l.ch = 0 // EOF
     } else {
-        l.ch = l.input[l.readPosition]
+        l.ch = l.input[l.rightPointer]
     }
-    l.position = l.readPosition
-    l.readPosition++
+    l.leftPointer = l.rightPointer
+    l.rightPointer++
 }
 
 func (l *Lexer) peekChar() byte {
-    if l.readPosition >= len(l.input) {
+    if l.rightPointer >= len(l.input) {
         return 0
     }
-    return l.input[l.readPosition]
+    return l.input[l.rightPointer]
 }
 
 func (l *Lexer) skipWhitespace() {
@@ -105,11 +108,11 @@ func isDigit(ch byte) bool {
 }
 
 func (l *Lexer) readIdentifier() string {
-    start := l.position
+    start := l.leftPointer
     for isLetter(l.ch) || isDigit(l.ch) {
         l.readChar()
     }
-    return l.input[start:l.position]
+    return l.input[start:l.leftPointer]
 }
 
 func lookupIdent(ident string) TokenType {
@@ -121,23 +124,31 @@ func lookupIdent(ident string) TokenType {
 }
 
 func (l *Lexer) readNumber() string {
-    start := l.position
+    start := l.leftPointer
     for isDigit(l.ch) {
         l.readChar()
     }
-    return l.input[start:l.position]
+    return l.input[start:l.leftPointer]
 }
 
 func (l *Lexer) readString() string {
     l.readChar() // skip opening '
 
-    start := l.position
+    start := l.leftPointer
 
-    for l.ch != '\'' && l.ch != 0 {
-        l.readChar()
-    }
+		for l.ch !=0{
+			if l.ch =='\''{
+				if l.peekChar() == '\''{
+					l.readChar()
+				}else{
+					break
+				}
+			}
 
-    value := l.input[start:l.position]
+			l.readChar()
+		}
+
+    value := l.input[start:l.leftPointer]
 
     l.readChar() // skip closing '
     return value
