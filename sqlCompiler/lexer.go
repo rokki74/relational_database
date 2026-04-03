@@ -9,6 +9,7 @@ const (
 	ILLEGAL TokenType = iota
 	IDENT
 
+	USE
 	SELECT
 	UPDATE
 	INSERT

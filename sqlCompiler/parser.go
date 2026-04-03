@@ -2,10 +2,15 @@ package sqlcompiler
 
 import(
 	"log"
+	"real_dbms/myDatabase/system"
 )
 
 type Statement interface{
 	stmtNode()
+}
+
+type UseStmt struct{
+	DBName string
 }
 
 type InsertStmt struct {
@@ -198,7 +203,7 @@ func (p *Parser) parsePrimary() (Expr, bool) {
     }
 }
 
-func (p *Parser) parseStatement() Statement{
+func (p *Parser) ParseStatement() Statement{
 	switch p.curToken.Type{
 	case SELECT:
 		return p.parseSelect()
@@ -214,6 +219,12 @@ func (p *Parser) parseStatement() Statement{
 		log.Printf("Unexpected statement %v", p.curToken.Value)
 		return nil
  	}
+}
+
+func (p *Parser) ParseUse(session *system.Session){
+	p.expect(USE)
+	session.currentDB = p.curToken.Value
+	p.expect(IDENT)
 }
 
 func (p *Parser) parseSelect() Statement{

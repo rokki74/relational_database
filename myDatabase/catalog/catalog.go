@@ -14,8 +14,7 @@ import (
 	   clgMngr.AddDatabaseCatalog(dbName)
 */
 
-
-const systemPath = "installationPath"
+const systemPath = myDatabase.system.GetSystemPath() 
 const cat_sys_database_file = systemPath +"/sys_database.tbl"
 
 const lenOffset = 1 
@@ -50,14 +49,19 @@ type CatalogManager struct{
 	CatalogEntry map[string]CatalogEntry
 }
 
-func NewCatalog() *CatalogManager{
+func NewCatalog() (*CatalogManager, bool){
+	clgMngr := &CatalogManager{}
 	_, err := os.Create(cat_sys_database_file)
   if err != nil{
-		log.Printf("System initialization failed!, ERROR: %v",err)
-		return false
-	} 
+		log.Printf("system init may have failed, checking for catalog.., ERROR: %v",err)
+		if os.Exists(cat_sys_database_file){
+			log.Printf("system issue alleviated, process flow continues")
+			return clgMngr, true
+		}
+		log.Fatal("System Failure, Shutting down")
+	}
 
-	return true
+  return clgMngr,true
 }
 
 //For create database workflow
@@ -100,6 +104,8 @@ func (clg *CatalogManager) LoadDatabaseCatalog(){
 			clg.CatalogEntry[DBName] = clgEntry
 		}
 	}
+
+	return clg
 }
 
 func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *CatalogEntry){

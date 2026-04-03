@@ -3,42 +3,52 @@ package sqlcompiler
 import (
 	"log"
 	"real_dbms/myDatabase"
+	"real_dbms/myDatabase/system"
 )
 
 type Executor struct{
-	db *myDatabase.Database_Manager
+	session *system.Session
+	syst *system.DBSystem
 }
 
-func (e *Executor) Execute(stmt Statement) [][]string {
-
+func (e *Executor) Execute(stmt Statement, db *myDatabase.Database_Manager) [][]string {
     switch s := stmt.(type) {
 
     case *SelectStmt:
-        return e.execSelect(s)
+			vals, ok := e.execSelect(s, db)
+				if !ok{
+					log.Printf("No data to select!, --debugging purposes")
+					return nil
+				}
+				return vals
 		case *InsertStmt:
-        e.execInsert(s)
+        e.execInsert(s, db)
         return nil
 		case *DeleteStmt:
-			  e.execDelete(s)
+			  e.execDelete(s, db)
 			  return nil
 		case *UpdateStmt:
-			  e.execUpdate(s)
+			  e.execUpdate(s, db)
 				return nil
     default:
         log.Printf("unsupported statement")
+				return nil
     }
 }
 
-func (e *Executor) execSelect(stmt *SelectStmt) [][]string {
-
-    table := e.db.GetTable(stmt.Table)
+func (e *Executor) execSelect(stmt *SelectStmt, db *myDatabase.Database_Manager) ([][]string, bool) {
+    table, exists := db.GetTable(stmt.Table)
+		if !exists{
+			log.Printf("Table does not exist")
+			return nil, false
+		}
 
     var results [][]string
 
     // full table scan (start simple)
-    for _, pageID := range table.PageIDs {
+		for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
 
-        page := e.db.BufferPool.Get(pageID)
+        page := db.BufferPool.FetchPage(pageID, e.db.GetTablePath(table.TableName))
 
         for slot := 0; slot < page.NumSlots(); slot++ {
 
@@ -58,12 +68,16 @@ func (e *Executor) execSelect(stmt *SelectStmt) [][]string {
             results = append(results, row)
         }
     }
-    return results
+    return results, true
 }
 
-func (e *Executor) execInsert(stmt *InsertStmt) {
+func (e *Executor) execInsert(stmt *InsertStmt, db *myDatabase.Database_Manager) {
 
-    table := e.db.GetTable(stmt.Table)
+    table, exists := db.GetTable(stmt.Table)
+		if !exists{
+			log.Printf("Table does not exist")
+			return
+		}
 
     // 1. Evaluate values
     values := e.evalInsertValues(stmt.Values)
@@ -72,21 +86,21 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 		tupleBytes := table.EncodeTuple(stmt.Column, values)
 
     // 3. Find page with space (FSM)
-    pageID := e.db.FSM.FindPageWithSpace(table.ID, len(tupleBytes))
+    pageID := db.FSM.FindPageWithSpace(e.db.dbName, table.TableName, len(tupleBytes))
 
     // fallback: allocate new page
     if pageID == -1 {
-        pageID = e.db.AllocatePage(table.ID)
+        pageID = db.AllocatePage(table.ID)
     }
 
     // 4. Get page
-    page := e.db.BufferPool.Get(pageID)
+    page := db.BufferPool.FetchPage(pageID, e.db.GetTablePath(table.TableName))
 
     // 5. Insert into page
     slot := page.InsertTuple(tupleBytes)
 
     // 6. WAL logging
-    e.db.WAL.LogInsert(pageID, slot, tupleBytes)
+    db.WAL.LogInsert(pageID, slot, tupleBytes)
 
     // 7. Update indexes
     e.updateIndexes(table, values, pageID, slot)
@@ -176,14 +190,18 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
     return values
 }
 
-func (e Executor) execDelete(stmt *DeleteStmt){
-	table := e.db.GetTable(smt.Table)
+func (e Executor) execDelete(stmt *DeleteStmt, db *myDatabase.Database_Manager){
+	table, exists := db.GetTable(stmt.Table)
+	if !exists{
+		log.Printf("Database does not exist, cannot delete")
+		return
+	}
 
-	for _, pageId := range table.PageIDs{
-		page := e.db.BufferPool.FetchPage(pageId)
+	for pageId := uint32(0); pageId <= table.LastPageId; pageId++{
+		page := db.BufferPool.FetchPage(pageId)
 		header := page.read_header()
 
-		for s =0; s<header.rowCount; s++{
+		for s :=0; s<header.rowCount; s++{
 			if page.SlotDead(s){continue}
 
 			rowId := RowId{pageId, s}
@@ -195,19 +213,23 @@ func (e Executor) execDelete(stmt *DeleteStmt){
 			}
 
 			page.KillSlotIndex(s)
-			e.db.WAL.LogDelete(pageId, slot)
+			db.WAL.LogDelete(pageId, slot)
 		}
 	}
 }
 
 
-func (e *Executor) execUpdate(stmt *UpdateStmt) {
+func (e *Executor) execUpdate(stmt *UpdateStmt, db *myDatabase.Database_Manager) {
 
-    table := e.db.GetTable(stmt.Table)
+    table, exists := db.GetTable(stmt.Table)
+		if !exists{
+			log.Printf("Cannot update, --Database doesn't exist!")
+			return
+		}
 
-    for _, pageID := range table.PageIDs {
+    for pageID := uint32(0); pageID <=table.LastPageId; pageID++ {
 
-        page := e.db.BufferPool.Get(pageID)
+        page := db.BufferPool.FetchPage(pageID)
 
         for slot := 0; slot < page.NumSlots(); slot++ {
 
@@ -233,24 +255,24 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 
                 page.UpdateTuple(slot, newTupleBytes)
 
-                e.db.WAL.LogUpdateInPlace(pageID, slot, newTupleBytes)
+                db.WAL.LogUpdateInPlace(pageID, slot, newTupleBytes)
 
             } else {
 
                 // mark old as deleted
                 page.MarkDeleted(slot)
-                e.db.WAL.LogDelete(pageID, slot)
+                db.WAL.LogDelete(pageID, slot)
 
                 // insert new tuple
-                newPageID := e.db.FSM.FindPageWithSpace(table.ID, len(newTupleBytes))
+                newPageID := db.FSM.FindPageWithSpace(table.ID, len(newTupleBytes))
                 if newPageID == -1 {
-                    newPageID = e.db.AllocatePage(table.ID)
+                    newPageID = db.AllocatePage(table.ID)
                 }
 
-                newPage := e.db.BufferPool.Get(newPageID)
+                newPage := db.BufferPool.Fetch(newPageID)
                 newSlot := newPage.InsertTuple(newTupleBytes)
 
-                e.db.WAL.LogInsert(newPageID, newSlot, newTupleBytes)
+                db.WAL.LogInsert(newPageID, newSlot, newTupleBytes)
 
                 // update indexes
                 e.updateIndexes(table, newValues, newPageID, newSlot)
