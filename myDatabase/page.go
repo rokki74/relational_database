@@ -95,7 +95,7 @@ func (page *Page) write_header(header *PageHeader) {
 
 }
 
-func (page *Page) read_header() PageHeader {
+func (page *Page) Read_header() PageHeader {
 	pageData := page.data
 	return PageHeader{
 		pageId:          binary.LittleEndian.Uint32(pageData[0:4]),
@@ -130,14 +130,14 @@ func (page *Page) free_space() int {
 	return slot_start - int(header.freeSpaceOffset)
 }
 
-func (page *Page) insert_row(row []byte) (*RowID, bool) {
+func (page *Page) Insert_row(row []byte) (*RowID, bool) {
 	row_length := len(row)
 	needed := int(row_length + SLOT_SIZE)
 	if needed > page.free_space() }
      return nil, false
    }
 
-	header := page.read_header()
+	header := page.Read_header()
 	
 	//slot indices start from zero while row counts are really starting from 1 on the header
 	//thus can use the current to refer to index and later use it's increment to update the row rowCount
@@ -162,18 +162,18 @@ func (page *Page) insert_row(row []byte) (*RowID, bool) {
 	return &rowId, true
 }
 
-func (page *Page) read_row(slot_index int) []byte{
+func (page *Page) Read_row(slot_index int) []byte{
 	slot := page.read_slot(slot_index)
 
 	return []byte(page.data[slot.offset:slot.offset+slot.length])
 }
 
-func (pg *Page) delete_row(slot_index int) {
+func (pg *Page) Delete_row(slot_index int) {
 	pg.killSlotIndex(slot_index)
 	pg.setFlag(PAGE_FLAG_LOOSE)
 }
 
-func (pg *Page) compact_slot(tempPage *Page){
+func (pg *Page) Compact_slot(tempPage *Page){
 	header := pg.read_header()
 	log.Printf("Compacting slots of %v", header.pageId)
 

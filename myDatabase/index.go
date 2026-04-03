@@ -24,7 +24,6 @@ type BPlusTree struct {
 	TreePath *string
 	IndexHeader *IndexHeader
 	BufferPool *BufferPool
-
 }
 
 type IndexEntry struct {
@@ -172,7 +171,7 @@ func (tree *BPlusTree) splitLeaf(leaf *LeafNode) {
 	tree.insertIntoParent(leaf, newLeaf.Keys[0], newLeaf)
 }
 
-func (index *Index) BuildMemTree(){
+func (index *Index) BuildMemTreeFromIndexFile(){
 	if index.MemTree != nil{
 		return
 	}
@@ -180,7 +179,43 @@ func (index *Index) BuildMemTree(){
 	tree := &BPlusTree{}
 	tree.TreePath = &index.FileName
   tree.IndexHeader = tree.ReadIndexHeader()
-
 	
+  for pgId=0;pgId<=index.LastPageId;pgId++{
+		page := tree.BufferPool.FetchPage(pgId, tree.TreePath)
+    header := page.Read_header()
+		for s:=0;s<header.RowCount;s++{
+		  row := page.Read_row(s)
+
+			indexEntry := &IndexEntry{}
+			offset := 0
+      switch tree.IndexHeader.KeyType{
+				case INT:
+					copy(indexEntry.Key, row[offset:offset+4])
+					offset += 4
+				case STRING:
+          copy(indexEntry.Key, row[offset:offset+4])
+					offset += 4
+				case TIMESTAMP:
+					copy(indexEntry.Key, row[offset:offset+8])
+					offset += 8
+      }
+
+
+			ptr := RowId{}
+			ptr.PageId := binary.LittleEndian.Uint32(row[offset:offset+4])
+			offset +=4
+			ptr.SlotId := binary.LittleEndian.Uint16(row[offset:offset+2])
+			offset += 2
+
+			indexEntry.Ptr = ptr
+			//How do i build back the tree here as i already have the IndexEntry either appending it into leaf node and the internal nodes respectively but what is the RootPageId. No using MemTree.Insert is better
+			index.MemTree.Insert(indexEntry.Key, indexEntry.Ptr)
+		}
+	}
 }
+
+func (index *Index) DeserializeIndexRow(row []byte){
+
+}
+
 

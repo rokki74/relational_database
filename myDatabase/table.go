@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+//A change in tables logic, you must always GetTable first so as to use it
 type ColumnType int 
 type TotalPagesSZ uint32
 type SchemaSizeSZ uint32
@@ -48,7 +49,14 @@ type Table struct {
 		TxnMngr *TransactionManager
 }
 
-func (db *Database_Manager) createTable(name string, columns []Column) Table{
+func (db *Database_Manager) createTable(name string, columns []Column) (Table, bool){
+  clgEntry := db.Catalog.CatalogEntry[db.DBName]
+	_, exists := clgEntry.Tables[name]
+	if !exists{
+		log.Printf("Table already exists!")
+		return nil, false
+	}
+
 		schm := Schema{
 		   columns: columns,
      	}
@@ -56,13 +64,26 @@ func (db *Database_Manager) createTable(name string, columns []Column) Table{
    table :=  Table{
 		   TableName: name,
 			 TableSchema: schm,
+			 LastPageId: 0,
 	   }
 
   pgr := Pager{}
-	//i think this next shld have been returning table's filename so we updated in in our tablesmap
+
+	clgEntry.Tables[name] = table
 	if pgr.SaveTable(*table, db.dbPath){
 		return table
 	}
+}
+
+func (db *Database_Manager) GetTable(name string) (Table, bool){
+  clgEntry := db.Catalog.CatalogEntry[db.DBName]
+	_, exists := clgEntry.Tables[name]
+	if !exists{
+		log.Printf("Table Doesn't exist!")
+		return nil, false
+	}
+
+  return clgEntry.Tables[name]
 }
 
 //After a scan get the pageId's that are free and by how many bytes then parse to this function to write to the fsm 
@@ -80,8 +101,9 @@ func (tb *Table) writeFsm(pageId, freeBytes uint16) bool{
 	tb.bufferpool.SavePage(tableId, page)
 }
 
-func (tb *Table) deleteTable(){
-	tb.bufferpool.DeleteTableById(tb.tableId)
+func (db *Database_Manager) deleteTable(name string){
+	db.bufferpool.DeleteTableById(tb.TableName)
+	delete(db.Catalog.CatalogEntry[db.dbName].Tables, db.Catalog.CatalogEntry[db.dbName].Tables[name])
 }
 
 func (tl *Table) read(pageId uint32) []string{
@@ -228,7 +250,7 @@ func (tb *Table) Insert(row string) {
 
 			key := extractColumnValue(row, col)
 
-			idx.Tree.Insert(key, ptr)
+			idx.MemTree.Insert(key, ptr)
 		}
 	}
 
@@ -276,6 +298,13 @@ func (tb *Table) CreateIndex(name string, column string) {
 	fileName := t.Name + "_" + column + ".idx"
 
 	ok, colPos, colType := tb.findColumnPosAndType(column)
+
+	indexCata := IndexCata{
+		IndexFile: fileName,
+		IndexName: name,
+		ColumnPos: colPos,
+	}
+
 	if !ok{
 		return
 	}
@@ -301,16 +330,24 @@ func (tb *Table) CreateIndex(name string, column string) {
 		MemTree: tree,
 	}
 
-	tb.Index[column] = index
+	tree.TreePath = &index.FileName
+
+	tb.Indexes = append(tb.Indexes, index)
 }
 
-func (tb *Table) buildIndex(idx *Index) {
+func (tb *Table) MakeIndexes(){
+	for _, index := range(tb.Indexes){
+		tb.MakeIndexMemTreeFromTableFile(&index)
+	}
+}
+
+func (tb *Table) MakeIndexMemTreeFromTableFile(idx *Index) {
 
     for pageId := uint32(0); pageId <= tb.LastPageId; pageId++ {
 
-        page := tb.bufferpool.FetchPage(tb.TableId, pageId)
+        page := tb.bufferpool.FetchPage(pageId, dbPath+"/"+tb.TableName)
 
-        header := page.read_header()
+        header := page.Read_header()
 
         for slot := 0; slot < int(header.rowCount); slot++ {
 
@@ -338,15 +375,15 @@ func (t *Table) FindByIndex(column string, key []byte) *Row {
 
 	idx := t.Indexes.indexes[column]
 
-	ptr := idx.Tree.Search(key)
+	ptr := idx.MemTree.Search(key)
 
 	if ptr == nil {
 		return nil
 	}
 
-	page := t.BufferPool.FetchPage(t.TableId, ptr.PageId)
+	page := t.BufferPool.FetchPage(ptr.PageId, idx.MemTree.TreePath)
 
-	return page.GetRow(ptr.SlotId)
+	return page.Read_row(ptr.SlotId)
 }
 
 //Index key extraction logic

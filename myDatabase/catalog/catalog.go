@@ -6,8 +6,17 @@ import (
 	"real_dbms/myDatabase"
 )
 
-const cat_tables_file = "sys_tables.tbl"
-const cat_indexes_file = "sys_indexes.tbl"
+/* My mental flow for this catalog logic, --helps me boostrap faster later when using:
+  clgMngr := NewCatalog()
+	clgMngr.LoadDatabaseCatalog()
+
+	For create database:
+	   clgMngr.AddDatabaseCatalog(dbName)
+*/
+
+
+const systemPath = "installationPath"
+const cat_sys_database_file = systemPath +"/sys_database.tbl"
 
 const lenOffset = 1 
 const typeOffset = 1
@@ -26,31 +35,78 @@ type IndexCata struct{
 	ColumnPos uint8
 }
 
+type IndexFrame struct{
+	IndexedTable string
+	IndexName string
+}
+
 type CatalogEntry struct{
 	Tables map[string]*myDatabase.Table
-	IndexMetas map[string]*IndexCata
+	IndexMetas map[IndexFrame]IndexCata
 }
 
+//clg manager here hasn't built the indexes instead using small meta, --this shall be a reminder for me later
 type CatalogManager struct{
-	Database string
-	CatalogEntry CatalogEntry
+	CatalogEntry map[string]CatalogEntry
 }
 
-func (clg *CatalogManager) NewCatalog(systemPath string) bool{
-	fullDBPath := systemPath+"/"+clg.Database
-	_, err1 := os.Create(fullDBPath+cat_tables_file)
-	_, err2 := os.Create(fullDBPath+cat_indexes_file)
+func NewCatalog() *CatalogManager{
+	_, err := os.Create(cat_sys_database_file)
+  if err != nil{
+		log.Printf("System initialization failed!, ERROR: %v",err)
+		return false
+	} 
 
-	if err1 | err2 !=nil{return false}
 	return true
 }
 
-func (clg *CatalogManager) LoadIndexMeta(systemPath string){
-	c chan *[]myDatabase.lastPageId
-	dbPath := systemPath+"/"+clg.Database +"/"
+//For create database workflow
+//Every db and tbl shall be responsible for persisting their catas to this catalog, so hard to manage from here intead the caller can just use a combination of clg pointer and extra steps to do it
+func (clg *CatalogManager) AddDatabaseCatalog(dbName string){
+	clg.CatalogEntry[dbName] = CatalogEntry{} 
+	return initDatabaseCatalog()
+}
 
-	clg.ScanFile(dbPath+cat_indexes_file, 8, c)
-	clg.CatalogEntry.IndexMetas := make(map[string][]*IndexCata)
+//For the system starting
+//Same with a call to fill the catalog entries
+func (clg *CatalogManager) LoadDatabaseCatalog(){
+	c chan *[]myDatabase.Page
+	clg.ScanFile(cat_tables_file, 8, c) 
+
+	for data := range(c){
+		pg := &Page{}
+		pg.data = data
+
+		header := pg.Read_header()
+		for s :=0; s<header.RowCount; s++{
+			row := pg.Read_row(s)
+
+			offset = 0
+			dbNameLen :=0
+			DBName :=""
+			copy(dbNameLen, row[:1])
+			offset +=1
+			copy(DBName, row[offset:offset+dbNameLen])
+			
+			DBTablesCataFile = dbName+"/_tables.tbl"
+	    DBIndexesCataFile = dbName+"/_indexes.tbl"
+      
+			clgEntry := CatalogEntry{}
+			//load index and tables catalogs
+			clg.LoadIndexMeta(DBIndexesCataFile, &clgEntry)
+			clg.LoadTableMeta(DBTablesCataFile, &clgEntry)
+
+			//so the tables and indexes cata are well aligned the only issue would be the database, what if this db has more than one row or overflows into next page etc? I still think such a case is very difficult as every row just stored one string the database name in the sys_database_file file. I will need to confirm later
+			clg.CatalogEntry[DBName] = clgEntry
+		}
+	}
+}
+
+func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *CatalogEntry){
+	c chan *[]myDatabase.lastPageId
+	clg.ScanFile(dbIndexesPath, 8, c)
+	
+	catalogEntry.IndexMetas := make(map[IndexFrame]IndexCata)
 	for data := range c{
 	  pg := Page{}
 		pg.data = data
@@ -74,44 +130,44 @@ func (clg *CatalogManager) LoadIndexMeta(systemPath string){
 
 			indexCata := IndexCata{
 			   IndexFile: indexFile,
-				 IndexName: indexName,
 				 ColumnPos: columnPos,
 			}
 
 			//incase a table had not just one indexes
-			catas := append(catas, indexCata)
-			clg.CatalogEntry.IndexMetas[indexedTable] = catas
+			indexFrame = IndexFrame{indexedTable, indexName}
+			catalogEntry.IndexMetas[indexFrame] = indexCata
 		}
 	}
 }
 
-func (clg *CatalogManager) BuildIndexesIntoTable(tableName string){
-	table := clg.CatalogEntry.Tables[tableName]
-	indexCatas := clg.CatalogEntry.IndexMetas[tableName]
+func (clg *CatalogManager) BuildIndexesIntoTable(tableName string, dbName string){
+	clgEntry := clg.CatalogEntry[dbName]
 
+	table := clgEntry.Tables[tableName]
 	table.Indexes := make([]Index, 0)
-	for i := 0; i<len(indexCatas); i++{
-		index := &Index{}
 
-		cata := indexCatas[i]
+	for k, cata := range clgEntry.IndexMetas{
+		if k.IndexedTable != table.TableName{
+			continue
+		}
+
+		index := &Index{}
 
 		index.ColumnPos := cata.ColumnPos
 		index.FileName := cata.IndexFile
 		index.Name := cata.IndexFile
-    index.MemTree := index.BuildMemTree()
+    index.MemTree := index.BuildMemTreeFromIndexFile()
 
 		table.Indexes := append(indexes, index)
 	}
 }
 
-func (clg *CatalogManager) LoadTableMeta() []TableCata{
-  indexMetasMap := clg.LoadIndexMeta()
-	clg.CatalogEntry.Tables := make(map[string]*myDatabase.Table)
+func (clg *CatalogManager) LoadTableMeta(dbTablesPath string, catalogEntry *CatalogEntry){
+	catalogEntry.Tables := make(map[string]*myDatabase.Table, 0)
 	
 	c chan *[]myDatabase.Page
-	clg.ScanFile(cat_tables_file, 8, c)
+	clg.ScanFile(dbTablesPath, 8, c)
 
-	tableMetas := make([]TableCata,0)
 	for data := range c{
 		pg := myDatabase.Page{}
 		pg.data = data
@@ -183,25 +239,17 @@ func (clg *CatalogManager) LoadTableMeta() []TableCata{
 				}
 			}
 
-      indexCata := indexMetas[tableName]
-      index := Index{
-			   Name: indexCata.IndexName,
-				 FileName: indexCata.IndexFileName,
-				 ColumnPos: indexCata.ColumnPos,
-			}
 			schema.columns = schemaCols
 
-			tableCata := TableCata{
+			table = Table{
 				TableName: tableName,
 				LastPageId: lastPageId,
 				FirstFramePageID: firstFramePageId,
 				TableSchema: schema,
 			}
 
-			tableMetas = append(tableMetas, &tableCata)
 		}
   }
-	return tableMetas
 }
 
 func (clg *CatalogManager) LoadCatalog(){
