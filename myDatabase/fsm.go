@@ -3,12 +3,15 @@
 package myDatabase
 
 type FSMData struct{
-	FSMPageId uint32
-	FSMMap map[uint32]uint16
+	TblPages map[uint32]uint16
+}
+
+type FSM struct{
+  Tbls map[string]FSMData
 }
 
 type FSMManager struct{
-	FsmFile string
-	FSMData *FSMData
+ LastFsmPageId uint32
+ Data map[uint32]FSM 
 }
 

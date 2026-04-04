@@ -6,12 +6,10 @@ import(
 	"real_dbms/myDatabase/catalog"
 )
 
-const sysPath = ""
+const sysPath = "/home/nines/Desktop/gon/TestDB"
 
 type DBSystem struct{
 	Catalog *catalog.CatalogManager
-	BufferPool myDatabase.BufferPool
-	Pager myDatabase.Pager
 	Wal myDatabase.WalManager
 }
 
@@ -27,8 +25,6 @@ func InitSystem() *DBSystem{
 	log.Printf("Started successfully!")
   return &DBSystem{
     Catalog: clgMngr,
-		BufferPool: myDatabase.BufferPool{},
-		Pager: myDatabase.Pager{},
 		Wal: myDatabase.WalManager{},
 	}
 }
@@ -41,7 +37,8 @@ func (syst *DBSystem) GetDatabase(dbName string) (*myDatabase.Database_Manager, 
 
 	dbMngr := &myDatabase.Database_Manager{}
 	dbMngr.Catalog = cata
-	dbMngr.dbName = dbName
+	dbMngr.Dbname = dbName
+	dbMngr.InitDbWal()
 
 	return dbMngr, true
 }

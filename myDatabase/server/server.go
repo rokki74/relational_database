@@ -1,5 +1,4 @@
-
-package main
+package server
 
 import (
 	"bufio"
@@ -77,8 +76,8 @@ func (s *Server) handleClient(conn net.Conn) {
 }
 
 func (s *Server) executeSQL(sql string) ([][]string, error) {
-	lexer := sqlcompiler.NewLexer(sql)
-	parser := sqlcompiler.NewParser(lexer)
+	lexer := sqlCompiler.NewLexer(sql)
+	parser := sqlCompiler.NewParser(lexer)
 	session := system.Session{}
 	parser.ParseUse(&session)
 

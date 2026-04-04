@@ -190,8 +190,7 @@ func (tl *Table) DeserializeColumns(rowBytes []byte) string{
 	offset := 0
 
 	var rowString string
-	for col_pos, col : range cols{
-		col_val := ""
+	for col, _ := range cols{
 		switch col.ColumnType{
 		case BOOLEAN:
 			value := rowBytes[offset:offset+1]
@@ -230,10 +229,10 @@ func (tb *Table) Insert(row string) {
 
 	 page := tb.BufferPool.FetchPage(pageId)
 	 rec := &WalRecord{
-		 TableId: tb.TableName,
+		 TableName: tb.TableName,
 		 PageId: page.PageId,
 		 DataSize: len(row_bytes),
-		 Data: row_data,
+		 Data: row_bytes,
 	 }
 
 	 lsn := t.txnMngr.wal.LogInsert(&rec)

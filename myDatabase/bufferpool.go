@@ -1,33 +1,38 @@
 package myDatabase
 
+import(
+	"log"
+	"strings"
+)
+
 type Frame struct{
-	FramePage: Page,
-	PinCount: uint32,
-	Dirty: bool.,
+	FramePage Page
+	PinCount uint32
+	Dirty bool
 }
 
-type BufferKey{
-	FileName: string,
-	PageId: uint32,
+type BufferKey struct{
+	FileName string
+	PageId uint32
 }
 
 type BufferPool struct{
-	pager: Pager,
+	Pager Pager
 	/*pageId is the best key in frames map as it is helps not to hold copies of same page in the map
 	thus map[pageId]Frame is the best course here*/
-	frames: map[BufferKey]Frame,
-	capacity: uint,
-	tablesMap *Database_Manager.tablesMap
-	fsm: FSMManager
+	frames map[BufferKey]Frame
+	capacity uint
+	fsm *FSMManager
 }
 
-func (bf *BufferPool) FetchPage(pageId uint32, fileName string) Page{
+func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
 	bufKey := BufferKey{fileName, pageId}
 
-	frame,ok = bf.frames[bufKey]
-		page,found  := bf.pager.GetPage(fileName, pageId)
+	frame,ok := bf.frames[bufKey]
+	if !ok{
+		page,found  := bf.Pager.GetPage(fileName, pageId)
 		if !found{
-			return
+			return nil, false
 		}
 
 		frm :=Frame{
@@ -37,71 +42,108 @@ func (bf *BufferPool) FetchPage(pageId uint32, fileName string) Page{
 		}
 
 		//add it to BufferPool
-    Pool[BufferKey{fileName, pageId}] = frm
+		bf.frames[BufferKey{fileName, pageId}] = frm
+		return &page, true
+  }
 
-	frame.pinCount +=1
-	return frame.page
+	frame.PinCount +=1
+	return &frame.FramePage, true
 }
 
 func (bf *BufferPool) SavePage(fileName string, page Page){
-	bufferKey := BufferKey{fileName, page.PageId}
+	header := page.Read_header()
+	bufferKey := BufferKey{fileName, header.PageId}
   
 	frm := Frame{
-		FramePage: Page,
+		FramePage: page,
     PinCount: 1,
     Dirty: true,
 	}
 
-	Pool[bufferKey] = frm
+	bf.frames[bufferKey] = frm
 }
 
 func (bf *BufferPool) evict_pages(){
 	
 	for key, val := range bf.frames{
 
-	     if val.pin_count == 0{
+	     if val.PinCount == 0{
 				 delete(bf.frames, key)
 
 			//persist just to make sure disk doesn't lag far behind after evictions
 			 }else if val.Dirty {
-					if bf.Pager.WritePage(key.FileName, key.PageId){
-					   val.Dirty = false
-					}
+				 if bf.Pager.WritePage(key.FileName, val.FramePage){
+					 val.Dirty = false
+				 }
       }
   }
 }	
 
 func (bf *BufferPool) DeleteTableName(fileName string){
-
-	[]bufkeys := map.keys(bf.frames)
-	for key := bufkeys{
+	for key, _ := range bf.frames{
 		if key.FileName == fileName{
-			bf.frames = delete(bf.frames, key)
+			delete(bf.frames, key)
 		}
 	}
 	
-	bf.pager.DeleteTable(fileName)
-	bf.tablesMap = delete(bf.tablesMap, fileName)
-
+	bf.Pager.DeleteTable(fileName)
+	//catalog really needs to be talked to, i've left it behind for so long!
 }
 
-func (bf *BufferPool) MarkDirty(fileName string, pageId uint32{
+func (bf *BufferPool) MarkDirty(fileName string, pageId uint32){
 	bufKey := BufferKey{fileName, pageId}
-	bf.frames[bufKey].Dirty = true
-}
-
-func (bf *BufferPool) FittingPage(tableFile string, length uint16)bool, uint32{
-	fsm :FSMManager{}
-	fsm.FsmFile = tableFile
-
-	fsms := bf.fsm.FSMData.FSMMap
-	for p, bts := ange bf.fsm.FSMData.FSMMap{
-		if bts >= uint64{
-			fmt.Printf("FOUND PAGE ID[p] to have accomodating free bytes returning..")
-			return true, p
-		}
+	datum, ok := 	bf.frames[bufKey]
+	if !ok{
+		return
 	}
 
-	return false
+	datum.Dirty = true
+}
+
+func (bf *BufferPool) FittingPage(filepath string, length uint16) (uint32, bool){
+	parts := strings.Split(filepath, ".tbl") 
+	fsmFile := parts[0]+".fsm"
+
+	for pId :=uint32(0); pId<= bf.fsm.LastFsmPageId; pId++{
+  	fsmData, exists := bf.fsm.Data[pId]
+	  if !exists{
+	  	continue
+	  }
+
+		tbls, okay := fsmData.Tbls[fsmFile]
+		if !okay{
+			continue
+		}
+
+		for pageId, bts := range tbls.TblPages{
+			if bts >= length{
+				log.Printf("FOUND PAGE ID[%v] to have accomodating free bytes returning..", pageId)
+				return pageId, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func (bf *BufferPool) UpdateFsm(filePath string, remainingSpace uint16){
+
+}
+
+func (bf *BufferPool) FlushAll(){
+	for key, val := range bf.frames{
+
+	     if val.PinCount == 0{
+				 delete(bf.frames, key)
+
+			//persist just to make sure disk doesn't lag far behind after evictions
+			 }else if val.Dirty {
+				 if bf.Pager.WritePage(key.FileName, val.FramePage){
+					 val.Dirty = false
+				 }
+      }
+
+			delete(bf.frames, key)
+  }
+
 }
 

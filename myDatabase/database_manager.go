@@ -2,10 +2,11 @@ package myDatabase
 
 import(
 	"os"
+	"log"
 )
 
 type Database_Manager struct{
-	dbName string
+	Dbname string
 	BufferPool *BufferPool
 	Catalog *CatalogManager
 	Pager *Pager
@@ -22,11 +23,24 @@ func (syst *DBSystem) CreateDatabase(name string) (*Database_Manager, bool){
 
  syst.Catalog.AddDatabaseCatalog(name)
  //Need to udate catalog entry to record this event
- dbMngr := &Database_Manager{dbName: name, BufferPool: &sys.BufferPool, Pager: &sys.Pager}
+ dbMngr := &Database_Manager{Dbname: name, BufferPool: &syst.BufferPool, Pager: &syst.Pager}
  return dbMngr, true
 }
 
-func (db *Database_Manager) GetTablePath(tbName string) string{
-	return GetSystemPath()+"/"+db.dbName+"/"+tbName+".tbl"
+func (db *Database_Manager) InitDbWal(){
+	db.WAL = NewWalManager(GetSystemPath+"/"+db.Dbname)
+}
+
+func (db *Database_Manager) GetTablePath(tbName string) (string, bool){
+  _, exists := db.GetTable(tbName)
+	if !exists{
+		return "", false
+	}
+
+  return GetSystemPath()+"/"+db.Dbname+"/"+tbName+".tbl", true
+}
+
+func (db *Database_Manager) Recover(){
+  db.WAL.Recover(db, 0)
 }
 

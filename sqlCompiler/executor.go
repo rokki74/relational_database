@@ -1,4 +1,4 @@
-package sqlcompiler
+package sqlCompiler
 
 import (
 	"log"
