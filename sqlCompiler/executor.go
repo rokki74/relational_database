@@ -4,6 +4,7 @@ import (
 	"log"
 	"real_dbms/myDatabase"
 	"real_dbms/myDatabase/system"
+	"strings"
 )
 
 type Executor struct{
@@ -11,7 +12,20 @@ type Executor struct{
 	syst *system.DBSystem
 }
 
-func (e *Executor) Execute(stmt Statement, db *myDatabase.Database_Manager) [][]string {
+func (e *Executor) Runner(clientData string) [][]string{
+	sql := strings.Split(clientData, ";")
+	var results [][]string
+	for i := 0; i < len(sql); i++{
+	  lexer := NewLexer(sql[i])
+		parser := NewParser(lexer)
+		stmt := parser.ParseStatement()
+	  results := append(results, e.Execute(stmt))
+	}
+
+	return results
+}
+
+func (e *Executor) Execute(stmt Statement) [][]string {
     switch s := stmt.(type) {
 
     case *SelectStmt:
@@ -48,7 +62,7 @@ func (e *Executor) execSelect(stmt *SelectStmt, db *myDatabase.Database_Manager)
     // full table scan (start simple)
 		for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
 
-        page := db.BufferPool.FetchPage(pageID, e.db.GetTablePath(table.TableName))
+        page := db.BufferPool.FetchPage(pageID, db.GetTablePath(table.TableName))
 
         for slot := 0; slot < page.NumSlots(); slot++ {
 
@@ -86,7 +100,7 @@ func (e *Executor) execInsert(stmt *InsertStmt, db *myDatabase.Database_Manager)
 		tupleBytes := table.EncodeTuple(stmt.Column, values)
 
     // 3. Find page with space (FSM)
-    pageID := db.FSM.FindPageWithSpace(e.db.dbName, table.TableName, len(tupleBytes))
+    pageID := db.FSM.FindPageWithSpace(db.dbName, table.TableName, len(tupleBytes))
 
     // fallback: allocate new page
     if pageID == -1 {
@@ -94,7 +108,7 @@ func (e *Executor) execInsert(stmt *InsertStmt, db *myDatabase.Database_Manager)
     }
 
     // 4. Get page
-    page := db.BufferPool.FetchPage(pageID, e.db.GetTablePath(table.TableName))
+    page := db.BufferPool.FetchPage(pageID, db.GetTablePath(table.TableName))
 
     // 5. Insert into page
     slot := page.InsertTuple(tupleBytes)

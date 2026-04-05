@@ -2,7 +2,7 @@ package myDatabase
 
 import(
 	"log"
-	"strings"
+	"encoding/binary"
 )
 
 type Frame struct{
@@ -17,7 +17,7 @@ type BufferKey struct{
 }
 
 type BufferPool struct{
-	Pager Pager
+	Pager *Pager
 	/*pageId is the best key in frames map as it is helps not to hold copies of same page in the map
 	thus map[pageId]Frame is the best course here*/
 	frames map[BufferKey]Frame
@@ -100,33 +100,29 @@ func (bf *BufferPool) MarkDirty(fileName string, pageId uint32){
 	datum.Dirty = true
 }
 
-func (bf *BufferPool) FittingPage(filepath string, length uint16) (uint32, bool){
-	parts := strings.Split(filepath, ".tbl") 
-	fsmFile := parts[0]+".fsm"
-
+func (bf *BufferPool) FittingPage(filepath string, length uint16) (uint32, *Page, bool){
 	for pId :=uint32(0); pId<= bf.fsm.LastFsmPageId; pId++{
-  	fsmData, exists := bf.fsm.Data[pId]
-	  if !exists{
-	  	continue
-	  }
-
-		tbls, okay := fsmData.Tbls[fsmFile]
-		if !okay{
+		fsmPage, prsnt := bf.FetchPage(pId, filepath)
+		if !prsnt{
 			continue
 		}
 
-		for pageId, bts := range tbls.TblPages{
-			if bts >= length{
+		header := fsmPage.Read_header()
+		for s:=0; s<=int(header.RowCount); s++{
+			row := fsmPage.Read_row(s)
+			var pageId uint32
+			var freeBytes uint16
+			binary.LittleEndian.PutUint32(row[0:4], pageId)
+			binary.LittleEndian.PutUint16(row[4:6], freeBytes)
+
+			if freeBytes >= length{
 				log.Printf("FOUND PAGE ID[%v] to have accomodating free bytes returning..", pageId)
-				return pageId, true
+				return pageId, fsmPage, true
 			}
+
 		}
 	}
-	return 0, false
-}
-
-func (bf *BufferPool) UpdateFsm(filePath string, remainingSpace uint16){
-
+	return 0, &Page{}, false
 }
 
 func (bf *BufferPool) FlushAll(){

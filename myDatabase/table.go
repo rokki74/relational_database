@@ -2,9 +2,7 @@ package myDatabase
 
 import (
 	"encoding/binary"
-	"fmt"
 	"log"
-	"path/filepath"
 	"strings"
 )
 
@@ -47,14 +45,15 @@ type Table struct {
 		bufferpool BufferPool
     Index  map[string]*Index
 		TxnMngr *TransactionManager
+		Db *Database_Manager
 }
 
 func (db *Database_Manager) createTable(name string, columns []Column) (Table, bool){
-  clgEntry := db.Catalog.CatalogEntry[db.DBName]
+  clgEntry := db.Catalog.CatalogEntry[db.Dbname]
 	_, exists := clgEntry.Tables[name]
 	if !exists{
 		log.Printf("Table already exists!")
-		return nil, false
+		return Table{}, false
 	}
 
 		schm := Schema{
@@ -67,74 +66,95 @@ func (db *Database_Manager) createTable(name string, columns []Column) (Table, b
 			 LastPageId: 0,
 	   }
 
-  pgr := Pager{}
-
 	clgEntry.Tables[name] = table
-	if pgr.SaveTable(*table, db.dbPath){
-		return table
+	if db.SaveTable(&table){
+		return table, true
 	}
+
+	return Table{}, false
 }
 
 func (db *Database_Manager) GetTable(name string) (Table, bool){
-  clgEntry := db.Catalog.CatalogEntry[db.DBName]
+  clgEntry := db.Catalog.CatalogEntry[db.Dbname]
 	_, exists := clgEntry.Tables[name]
 	if !exists{
 		log.Printf("Table Doesn't exist!")
-		return nil, false
+		return Table{}, false
 	}
 
   return clgEntry.Tables[name]
 }
 
+func (db *Database_Manager) SaveTable(table *Table) bool{
+	return db.Catalog.SaveTable(table)
+}
+
 //After a scan get the pageId's that are free and by how many bytes then parse to this function to write to the fsm 
-func (tb *Table) writeFsm(pageId, freeBytes uint16) bool{
-	//What if a table only ever had it's tableId and uses it only then the bufferpool knows the real name for it using the id
-	page := tb.bufferpool.fetch_page(tableId, LastFramePageId)
-	header := page.read_header()
+func (tb *Table) writeFsm(pageId uint32, freeBytes uint16){
+  fsmData := FSMData{}
+	fsmData.TblPages[pageId] = freeBytes
 
-	binary.LittleEndian.PutUint16(page[header.freeSpaceOffset:header.freeSpaceOffset+4], uint32(pageId))
-  header.freeSpaceOffset += 4
-	binary.LittleEndian.PutUint32(page[header.freeSpaceOffset:header.freeSpaceOffset+2], uint16(freeBytes))
-	header.freeSpaceOffset += 2
-	page.write_header(&header)
+	tb.Db.FsmManager.Data.Tbls[tb.TableName] = fsmData
+  
+	fsmPath, exists := tb.Db.GetFsmPath(tb.TableName)
+	if !exists{
+	   return
+	}
+	page, ok := tb.Db.Bufferpool.FetchPage(tb.Db.FsmManager.LastFsmPageId, fsmPath)
+	if !ok{
+	 return
+	}
+	header := page.Read_header()
 
-	tb.bufferpool.SavePage(tableId, page)
+	binary.LittleEndian.PutUint32(page[header.FreeSpaceOffset:header.FreeSpaceOffset+4], uint32(pageId))
+  header.FreeSpaceOffset += 4
+	binary.LittleEndian.PutUint16(page[header.FreeSpaceOffset:header.FreeSpaceOffset+2], uint16(freeBytes))
+	header.FreeSpaceOffset += 2
+	page.Write_header(&header)
+
+	tb.Db.BufferPool.SavePage(fsmPath, *page)
 }
 
-func (db *Database_Manager) deleteTable(name string){
-	db.bufferpool.DeleteTableById(tb.TableName)
-	delete(db.Catalog.CatalogEntry[db.dbName].Tables, db.Catalog.CatalogEntry[db.dbName].Tables[name])
+func (db *Database_Manager) deleteTable(table *Table){
+	db.Catalog.DeleteTable(table)
 }
 
-func (tl *Table) read(pageId uint32) []string{
+func (tl *Table) read(pageId uint32) ([]byte, bool){
 	rows := make([]byte, 0)
 	filename := tl.TableName +".tbl"
-	pg := tl.BufferPool.fetch_page(pageId, filename)
-
-	header := pg.header()
-	for i :=0; i<header.rowCount; i++{
-		row := pg.read_row(i)
+	pg, exists := tl.Db.BufferPool.FetchPage(pageId, filename)
+	if !exists{
+	   return rows, false
+	}
+	header := pg.Read_header()
+	for i :=0; i<int(header.RowCount); i++{
+		row := pg.Read_row(i)
 		rows = append(rows, row)
 	}
 
-	return rows
+	return rows, true
 }
 
 func (tl *Table) Scan(ScanPages uint8, c chan *[]Page ){
-	if scanPages >10{
+	if ScanPages >10{
 		ScanPages =10
 	}
 
 	table_pages := make([]Page, ScanPages)
 	for p := 0; p<=int(tl.LastPageId); p++{
 		pg := Page{}
-		pg.data = tl.read(p)
+		data, ok := tl.read(uint32(p))
+		if !ok{
+		  continue
+		}
+
+		copy(pg.data[:], data[:4096])
 		table_pages = append(table_pages, pg)
 
 		if len(table_pages) >= int(ScanPages){
 			c <- &table_pages
 
-			table_pages = make([]Page, 0, scanLimit)
+			table_pages = make([]Page, 0, ScanPages)
 		}
 	}
 
@@ -153,8 +173,6 @@ func (tl *Table) close_table(){
 
 func (tl *Table) SerializeColumn(row string) []byte{
   parts := strings.Split(row, SEPARATOR)
-	cols := tl.TableSchema.columns
-
 	buf := make([]byte, 0)
 	for pos, col := range parts{
 		val := parts[pos]

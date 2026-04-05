@@ -10,7 +10,9 @@ const sysPath = "/home/nines/Desktop/gon/TestDB"
 
 type DBSystem struct{
 	Catalog *catalog.CatalogManager
-	Wal myDatabase.WalManager
+	Pager myDatabase.Pager
+	Executor myDatabase.Executor
+	Sessions map[string]*myDatabase.Database_Manager
 }
 
 func GetSystemPath() string{
@@ -25,7 +27,6 @@ func InitSystem() *DBSystem{
 	log.Printf("Started successfully!")
   return &DBSystem{
     Catalog: clgMngr,
-		Wal: myDatabase.WalManager{},
 	}
 }
 
@@ -38,8 +39,26 @@ func (syst *DBSystem) GetDatabase(dbName string) (*myDatabase.Database_Manager, 
 	dbMngr := &myDatabase.Database_Manager{}
 	dbMngr.Catalog = cata
 	dbMngr.Dbname = dbName
-	dbMngr.InitDbWal()
-
+	dbMngr.Pager = &syst.Pager
+	dbMngr.InitDb()
+  
+	syst.NewSession(dbMngr)
 	return dbMngr, true
+}
+
+func (syst *DBSystem) NewSession(db *myDatabase.Database_Manager){
+  if syst.InSession(db){
+	  return
+	}
+  syst.Sessions[db.Dbname] = db
+}
+
+func (syst *DBSystem) InSession(db *myDatabase.Database_Manager) bool{
+  _, in := syst.Sessions[db.Dbname]
+	return in
+}
+
+func (syst *DBSystem) EndSession(db *myDatabase.Database_Manager){
+  delete(syst.Sessions, db.Dbname)
 }
 
