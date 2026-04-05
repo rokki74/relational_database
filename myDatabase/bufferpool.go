@@ -143,3 +143,11 @@ func (bf *BufferPool) FlushAll(){
 
 }
 
+func (bf *BufferPool) AllocatePage(table *Table) *Page{
+  pg := &Page{}
+	allocId := table.LastPageId++
+	pg.Init(allocId)
+
+	return pg
+}
+

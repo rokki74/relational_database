@@ -2,8 +2,8 @@ package sqlCompiler
 
 import (
 	"log"
-	"real_dbms/myDatabase"
 	"real_dbms/myDatabase/system"
+	"real_dbms/myDatabase"
 	"strings"
 )
 
@@ -12,14 +12,14 @@ type Executor struct{
 	syst *system.DBSystem
 }
 
-func (e *Executor) Runner(clientData string) [][]string{
+func (e *Executor) Runner(clientData string, c chan [][]string) [][]string{
 	sql := strings.Split(clientData, ";")
 	var results [][]string
 	for i := 0; i < len(sql); i++{
 	  lexer := NewLexer(sql[i])
 		parser := NewParser(lexer)
-		stmt := parser.ParseStatement()
-	  results := append(results, e.Execute(stmt))
+		stmt := parser.ParseStatement(e)
+		c <- e.Execute(stmt)
 	}
 
 	return results
@@ -29,28 +29,40 @@ func (e *Executor) Execute(stmt Statement) [][]string {
     switch s := stmt.(type) {
 
     case *SelectStmt:
-			vals, ok := e.execSelect(s, db)
+			vals, ok := e.execSelect(s)
 				if !ok{
 					log.Printf("No data to select!, --debugging purposes")
 					return nil
 				}
 				return vals
 		case *InsertStmt:
-        e.execInsert(s, db)
+        e.execInsert(s)
         return nil
 		case *DeleteStmt:
-			  e.execDelete(s, db)
+			  e.execDelete(s)
 			  return nil
 		case *UpdateStmt:
-			  e.execUpdate(s, db)
+			  e.execUpdate(s)
 				return nil
+		case *CreateDBStmt:
+			 e.execCreateDB(s)
+		case *CreateTBLStmt:
+			 e.execCreateTbl(s)
+		case *CreateIDXStmt:
+			 e.execCreateIDX(s)
     default:
         log.Printf("unsupported statement")
 				return nil
     }
+		return nil
 }
 
-func (e *Executor) execSelect(stmt *SelectStmt, db *myDatabase.Database_Manager) ([][]string, bool) {
+func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
+		db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
+		if !ok{
+			log.Printf("Database unavailable for table deletion operation!")
+			return nil, false
+		}
     table, exists := db.GetTable(stmt.Table)
 		if !exists{
 			log.Printf("Table does not exist")
@@ -61,16 +73,23 @@ func (e *Executor) execSelect(stmt *SelectStmt, db *myDatabase.Database_Manager)
 
     // full table scan (start simple)
 		for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
-
-        page := db.BufferPool.FetchPage(pageID, db.GetTablePath(table.TableName))
-
-        for slot := 0; slot < page.NumSlots(); slot++ {
+        tablePath, okay := db.GetTablePath(table.TableName)
+				if !okay{
+					return nil, false
+				}
+        page, present := db.BufferPool.FetchPage(pageID, tablePath)
+        if !present{
+					log.Printf("Page not found! [TablePath: %v, PageId: %v] ", tablePath, pageID)
+					return nil, false
+				}
+				header := page.Read_header()
+        for slot := 0; slot < int(header.RowCount); slot++ {
 
             if !page.IsAlive(slot) {
                 continue
             }
 
-            tuple := page.ReadTuple(slot)
+            tuple := page.Read_row(slot)
 
             if stmt.Where != nil {
                 if !e.evalExpr(stmt.Where, tuple) {
@@ -85,8 +104,12 @@ func (e *Executor) execSelect(stmt *SelectStmt, db *myDatabase.Database_Manager)
     return results, true
 }
 
-func (e *Executor) execInsert(stmt *InsertStmt, db *myDatabase.Database_Manager) {
-
+func (e *Executor) execInsert(stmt *InsertStmt) {
+		db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
+		if !ok{
+			log.Printf("Database unavailable for table deletion operation!")
+			return
+		}
     table, exists := db.GetTable(stmt.Table)
 		if !exists{
 			log.Printf("Table does not exist")
@@ -100,24 +123,31 @@ func (e *Executor) execInsert(stmt *InsertStmt, db *myDatabase.Database_Manager)
 		tupleBytes := table.EncodeTuple(stmt.Column, values)
 
     // 3. Find page with space (FSM)
-    pageID := db.FSM.FindPageWithSpace(db.dbName, table.TableName, len(tupleBytes))
+		tblPath := db.GetObjPath(table.TableName, TABLETYPE)
+		fsmPath := db.GetObjPath(table.TableName, FSMTYPE)
+    pageID, fsmPage, availed := db.BufferPool.FittingPage(fsmPath, uint16(len(tupleBytes)))
+		if !availed{
+			return
+		}
+    
+		page, found := db.BufferPool.FetchPage(pageID, tblPath)
+		if found{
+			page.Insert_row(tupleBytes)
+			db.BufferPool.fsm.UpdateFSM(&fsmPage, pageID, uint16(stmt.Values))
+			db.BufferPool.SavePage(fsmPath, fsmPage)
+		}
 
     // fallback: allocate new page
-    if pageID == -1 {
-        pageID = db.AllocatePage(table.ID)
-    }
-
-    // 4. Get page
-    page := db.BufferPool.FetchPage(pageID, db.GetTablePath(table.TableName))
-
+		pg := db.BufferPool.AllocatePage(&table)
+    db.BufferPool.SavePage(tblPath, *pg)
     // 5. Insert into page
-    slot := page.InsertTuple(tupleBytes)
+    slot := page.Insert_row(tupleBytes)
 
     // 6. WAL logging
     db.WAL.LogInsert(pageID, slot, tupleBytes)
 
     // 7. Update indexes
-    e.updateIndexes(table, values, pageID, slot)
+    e.db.UpdateIndexesUpdateIndexes(table, values, pageID, slot)
 }
 
 func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
@@ -204,7 +234,12 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
     return values
 }
 
-func (e Executor) execDelete(stmt *DeleteStmt, db *myDatabase.Database_Manager){
+func (e Executor) execDelete(stmt *DeleteStmt){
+	db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
+	if !ok{
+		log.Printf("Database unavailable for table deletion operation!")
+		return
+	}
 	table, exists := db.GetTable(stmt.Table)
 	if !exists{
 		log.Printf("Database does not exist, cannot delete")
@@ -212,7 +247,7 @@ func (e Executor) execDelete(stmt *DeleteStmt, db *myDatabase.Database_Manager){
 	}
 
 	for pageId := uint32(0); pageId <= table.LastPageId; pageId++{
-		page := db.BufferPool.FetchPage(pageId)
+		page := db.BufferPool.FetchPage(pageId, db.GetTablePath(table.TableName))
 		header := page.read_header()
 
 		for s :=0; s<header.rowCount; s++{
@@ -220,8 +255,8 @@ func (e Executor) execDelete(stmt *DeleteStmt, db *myDatabase.Database_Manager){
 
 			rowId := RowId{pageId, s}
 
-			if smt.Where !=nil{
-				if !e.evalExpr(smt.Where, rowId){
+			if stmt.Where !=nil{
+				if !e.evalExpr(stmt.Where, rowId){
 					continue
 				}
 			}
@@ -233,8 +268,12 @@ func (e Executor) execDelete(stmt *DeleteStmt, db *myDatabase.Database_Manager){
 }
 
 
-func (e *Executor) execUpdate(stmt *UpdateStmt, db *myDatabase.Database_Manager) {
-
+func (e *Executor) execUpdate(stmt *UpdateStmt) {
+		db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
+		if !ok{
+			log.Printf("Database unavailable for table deletion operation!")
+			return
+		}
     table, exists := db.GetTable(stmt.Table)
 		if !exists{
 			log.Printf("Cannot update, --Database doesn't exist!")
@@ -312,7 +351,32 @@ func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) map[string]string 
     return result
 }
 
+func (e *Executor) execCreateDB(stmt Statement){
+	dbName := stmt.DBName
+	e.syst.CreateDatabase(dbName)
+}
 
+func (e *Executor) execCreateTbl(stmt Statement){
+  dbMngr, exists := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
+	if !exists{
+		log.Printf("Unable to create table in a non-existent database!")
+		return
+	}
+  dbMngr.CreateTable(stmt.TBLName)
+}
 
+func (e *Executor) execCreateIDX(stmt Statement){
+   dbMngr, exists := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
+	 if !exists{
+		 log.Printf("Can't create an index on non-existent database")
+		 return
+	 }
 
+	 table, ok := dbMngr.GetTable(stmt.ParentTableName)
+	 if !ok{
+		 log.Printf("Table not available, might be deleted! %v", stmt.ParentTableName)
+	 }
+
+	 table.CreateIndex(stmt.IDXName, stmt.Columns)
+}
 

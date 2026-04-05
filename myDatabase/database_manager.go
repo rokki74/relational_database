@@ -121,3 +121,8 @@ func (db *Database_Manager) FillFSM(){
   db.FsmManager.FillFsms(db, tableNames)
 }
 
+func UpdateIndexes(table *Table, values, pageID uint32, slot Slot){
+
+}
+
+

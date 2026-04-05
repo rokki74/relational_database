@@ -307,49 +307,50 @@ func (tb *Table)findColumnPosAndType(col string) (bool, int, ColumnType){
 	}
 	log.Printf("The column [%col] couldn't be found in table schema!", col)
 
-	return
+	return false, 0, nil
 }
 
-func (tb *Table) CreateIndex(name string, column string) {
+func (tb *Table) CreateIndex(name string, columns []string) {
+  for _, column := range columns{
+		fileName := t.Name + "_" + column + ".idx"
 
-	fileName := t.Name + "_" + column + ".idx"
+		ok, colPos, colType := tb.findColumnPosAndType(column)
 
-	ok, colPos, colType := tb.findColumnPosAndType(column)
+		indexCata := IndexCata{
+			IndexFile: fileName,
+			IndexName: name,
+			ColumnPos: colPos,
+		}
 
-	indexCata := IndexCata{
-		IndexFile: fileName,
-		IndexName: name,
-		ColumnPos: colPos,
-	}
-
-	if !ok{
-		return
-	}
+		if !ok{
+			return
+		}
 	
-	indexHeader := IndexHeader{
-		RootPageId: 0,
-		ColumnPos: colPos,
-		IsUnique: false,
-		KeyType: colType,
-	}
+		indexHeader := IndexHeader{
+			RootPageId: 0,
+			ColumnPos: colPos,
+			IsUnique: false,
+			KeyType: colType,
+		}
 
-	tree := BPlusTree{
-		IndexHeader: *indexHeader,
-		BufferPool: *tb.bufferPool,
-	}
+		tree := BPlusTree{
+			IndexHeader: *indexHeader,
+			BufferPool: *tb.bufferPool,
+		}
 
 
-	index := &Index{
-		Name: name,
-		TableId: t.TableId,
-		Column: column,
-		FileName: fileName,
-		MemTree: tree,
-	}
+		index := &Index{
+			Name: name,
+			TableId: t.TableId,
+			Column: column,
+			FileName: fileName,
+			MemTree: tree,
+		}
 
-	tree.TreePath = &index.FileName
+		tree.TreePath = &index.FileName
 
-	tb.Indexes = append(tb.Indexes, index)
+		tb.Indexes = append(tb.Indexes, index)
+  }
 }
 
 func (tb *Table) MakeIndexes(){

@@ -13,13 +13,29 @@ type UseStmt struct{
 	DBName string
 }
 
+type CreateDBStmt struct{
+  DBName string
+}
+
+type CreateTBLStmt struct{
+  TBLName string
+}
+
+type CreateIDXStmt struct{
+  ParentTableName string
+  IDXName string
+	Columns string
+}
+
 type InsertStmt struct {
-    Table   string
+    ParentDBName string
+	Table	Table   string
     Columns []string
     Values  []Expr
 }
 
 type DeleteStmt struct {
+   ParentDBName string
     Table string
     Where Expr
 }
@@ -31,18 +47,15 @@ const (
 	INDEX
 )
 
-type CreateStmt struct{
-	objectType ObjectType
-	objectName string
-}
-
 type UpdateStmt struct {
-    Table string
-    Set   map[string]Expr
-    Where Expr
+	ParentDBName string
+	Table string
+	Set   map[string]Expr
+	Where Expr
 }
 
 type SelectStmt struct{
+  ParentDBName string
 	Columns []string 
 	Table string 
 	Where Expr
@@ -53,6 +66,9 @@ func (*UpdateStmt) stmtNode(){}
 func (*DeleteStmt) stmtNode(){}
 func (*InsertStmt) stmtNode(){}
 func (*CreateStmt) stmtNode(){}
+func (*CreateDBStmt) stmtNode(){}
+func (*CreateIDXStmt) stmtNode(){}
+func (*CreateTBLStmt) stmtNode(){}
 
 type Expr interface{}
 
@@ -203,8 +219,10 @@ func (p *Parser) parsePrimary() (Expr, bool) {
     }
 }
 
-func (p *Parser) ParseStatement() Statement{
+func (p *Parser) ParseStatement(e *Executor) Statement{
 	switch p.curToken.Type{
+	case USE:
+		p.ParseUse(e)
 	case SELECT:
 		return p.parseSelect()
 	case UPDATE:
@@ -221,15 +239,15 @@ func (p *Parser) ParseStatement() Statement{
  	}
 }
 
-func (p *Parser) ParseUse(session *system.Session){
+func (p *Parser) ParseUse(e *Executor) Statement{
 	p.expect(USE)
-	session.currentDB = p.curToken.Value
 	p.expect(IDENT)
+	e.session.CurrentDB = p.curToken.Value
+	return p.ParseStatement(e)
 }
 
-func (p *Parser) parseSelect() Statement{
+func (p *Parser) parseSelect(e *Executor) Statement{
 	stmt := &SelectStmt{}
-
 	p.expect(SELECT)
 	columns := p.parseColumns()
 	stmt.Columns = columns
@@ -334,13 +352,66 @@ func (p *Parser) parseDelete() Statement{
 	return stmt
 }
 
-//CAUTION! incomplete
 func (p *Parser) parseCreate() Statement{
-	stmt := &CreateStmt{}
-	return stmt
+	p.expect(CREATE)
+	identType := p.curToken.Value
+	p.expect(IDENT)
+	switch identType{
+	case TABLE:
+		return p.ParseCreateTable()
+	case DATABASE:
+		return p.parseCreateDatabase()
+	case INDEX:
+		return p.parseCreateIndex()
+	default:
+	  log.Printf("Cannot create unknown object on create statement, %v", identType)
+		return nil
+	}
 }
 
+func (p *Parser) parseCreateDatabase() Statement{
+ databaseName := p.curToken.Value
+ return CreateDBStmt{
+   DBName: databaseName,
+ } 
+}
 
+func (p *Parser) parseCreateTable() Statement{
+ tableName := p.curToken.Value
+ return CreateTBLStmt{
+   TBLName: tableName,
+ }
+}
 
+func (p *Parser) parseCreateIndex() Statement{
+  indexName := p.curToken.Value
+	p.expect(IDENT)
+	p.expect(ON)
+	tableName := p.curToken.Value
+	p.expect(LPAREN)
+	cols := make([]string, 0)
+	for {
+	  col := p.curToken.Value
+		cols := append(cols, col)
+		p.expect(COMMA)
 
+		if p.curTokenType == RPAREN{
+		  break
+		}
+	}
+	p.expect(RPAREN)
+  colmn := p.curToken.Value
+	return CreateIDXStmt{
+	  IDXName: indexName,
+		Columns: cols,
+	}
+}
 
+func Junk(){
+	  if dbMngr, exists := e.syst.GetDatabase(dbName); !exists{
+			log.Printf("Database Doesn't exist for executing statement!")
+			return nil
+		}else{
+					e.syst.NewSession(dbMngr)
+					e.session.CurrentDB = dbMngr.dbName
+}
