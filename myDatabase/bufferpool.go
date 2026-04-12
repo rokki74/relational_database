@@ -22,7 +22,7 @@ type BufferPool struct{
 	thus map[pageId]Frame is the best course here*/
 	frames map[BufferKey]Frame
 	capacity uint
-	fsm *FSMManager
+	Fsm *FSMManager
 }
 
 func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
@@ -109,10 +109,10 @@ func (bf *BufferPool) FittingPage(filepath string, length uint16) (uint32, *Page
 
 		header := fsmPage.Read_header()
 		for s:=0; s<=int(header.RowCount); s++{
-			row := fsmPage.Read_row(s)
+			row := fsmPage.ReadRow(s)
 			var pageId uint32
 			var freeBytes uint16
-			binary.LittleEndian.PutUint32(row[0:4], pageId)
+			binary.LittleEndian:.PutUint32(row[0:4], pageId)
 			binary.LittleEndian.PutUint16(row[4:6], freeBytes)
 
 			if freeBytes >= length{

@@ -59,7 +59,7 @@ func (pg *Page) checkFlags(dirty, tombstone, overflow, loose uint8) (bool, bool,
 	return (pg.data[12] & dirty) != 0, (pg.data[12] & tombstone) != 0, (pg.data[12] & overflow) != 0, (pg.data[12] & loose) != 0
 }
 
-func (p *Page) killSlotIndex(slot int) {
+func (p *Page) KillSlotIndex(slot int) {
 	byteIndex := slot / 8
 	bitIndex := slot % 8
 	p.data[BITMAP_OFFSET+byteIndex] |= (1 << bitIndex)
@@ -226,3 +226,14 @@ func (pg *Page) Compact_slot(tempPage *Page){
 	   }
   }
 }
+
+func (pg *Page) UpdateRowInPlace(rowId *RowId, data []byte) bool{
+   slot := pg.Read_slot(int(rowId.SlotId))
+	 dataLen := len(data)
+	 if int(slot.length) < dataLen{
+		 return false
+	 }
+	 newOffset := int(slot.offset) + dataLen
+   copy(pg.data[slot.offset:newOffset], data)
+	 return true
+ }

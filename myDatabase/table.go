@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"log"
 	"strings"
+	"strconv"
 )
 
 //A change in tables logic, you must always GetTable first so as to use it
@@ -23,13 +24,13 @@ const(
 const SEPARATOR = ","
 
 type Column struct{
-	columnName string
-	columnType ColumnType
+	ColumnName string
+	ColumnType ColumnType
 	nullable bool
 }
 
 type Schema struct{
-	columns []Column
+	Columns []Column
 }
 
 type FsmEntry struct{
@@ -43,7 +44,7 @@ type Table struct {
 		LastPageId uint32
 		FirstFramePageId uint32
 		bufferpool BufferPool
-    Index  map[string]*Index
+    Indexes  map[string]*Index
 		TxnMngr *TransactionManager
 		Db *Database_Manager
 }
@@ -171,31 +172,28 @@ func (tl *Table) close_table(){
 
 }
 
-func (tl *Table) SerializeColumn(row string) []byte{
-  parts := strings.Split(row, SEPARATOR)
-	buf := make([]byte, 0)
-	for pos, col := range parts{
-		val := parts[pos]
+func (tl *Table) SerializeColumnValues(parts []string, colTypes []ColumnType) []byte{
+	buf := make([]byte, 4)
 
-		switch col.ColumnType{
+	for pos, val := range parts{
+    colType := colTypes[pos]
+		switch colType{
 		case BOOLEAN:
 			if strings.ToLower(val) == "true"{
-				buf = append(buf, byte(1))
-				buf = append(buf, byte(1))
+				buf = append(buf, byte(1))//i shall deduce size from TableSchema later on deserialize
 			}else{
-				buf = append(buf, 1)
 				buf = append(buf, byte(1))
 			}
 		case INT:
-			v, _ := strings.strconv.Atoi(val)
-			buf = append(buf, len(v))
-			tmp := make([]byte, 4)
-			binary.LittleEndian.PutUint32(tmp, v)
-			buf = append(buf, tmp)
+			v, _ := strconv.Atoi(val)
+			tmp := make([]byte, 0)
+			binary.LittleEndian.PutUint32(tmp, uint32(v))
+			buf = append(buf, tmp...)
+
 		case STRING:
 			strBytes := []byte(val)
 			col_len := make([]byte, 2)
-			binary.LittleEndian.PutUint16(col_len, len(strBytes))
+			binary.LittleEndian.PutUint16(col_len, uint16(len(strBytes)))
 			buf = append(buf, col_len...)
 			buf = append(buf, strBytes...)
 		}
@@ -203,42 +201,44 @@ func (tl *Table) SerializeColumn(row string) []byte{
 	return buf
 }
 
-func (tl *Table) DeserializeColumns(rowBytes []byte) string{
-	cols := tl.TableSchema.columns
+func (tl *Table) DeserializeColumnValues(rowBytes []byte) string{
 	offset := 0
 
 	var rowString string
-	for col, _ := range cols{
-		switch col.ColumnType{
-		case BOOLEAN:
-			value := rowBytes[offset:offset+1]
+	vals := make([]string, 0)
+	
+	colType := rowBytes[offset]
+	switch colType{
+	 case 0:
+		 value := rowBytes[offset]
+			var col_value string
 			if value ==1{
 				col_value = "true"
 			}else{
 				col_value = "false"
 			}
 
+			vals = append(vals, col_value)
 			offset += 1
-		case INT:
-			value := rowBytes[offset:offset+4]
-			col_value = uint32(value)
-
+	 case 1:
+			col_value := string(rowBytes[offset:offset+4])
+			vals = append(vals, col_value)
 			offset += 4
-		case STRING:
-			str_len := rowBytes[offset:offset+2]
+	 case 2:
+			var str_len uint16
+			str_len = binary.LittleEndian.Uint16(rowBytes[offset:offset+2])
 			offset += 2
-			col_value + string(rowBytes[offset:offset+str_len])
-		}
+			col_value := string(rowBytes[offset:offset+int(str_len)])
 
-		//building back my user facing string
-		rowString = rowString+ SEPARATOR + col_value
+			vals = append(vals, col_value)
 	}
 
+  //building back my user facing string
+	rowString = strings.Join(vals, ",")
 	return rowString
 }
 
 func (tb *Table) Insert(row string) {
-	 txn : tb.TxnMngr.Begin()
 	 row_bytes := tb.SerializeColumns(row)
    ok, pageId := tb.bufferpool.FittingPage(tb.tableId, len(row_bytes))
 	 if !ok{
@@ -265,7 +265,7 @@ func (tb *Table) Insert(row string) {
   if tb.Indexed{
 		for col, idx := range t.Indexes.indexes {
 
-			key := extractColumnValue(row, col)
+			key := tb.extractColumnValue(row, col)
 
 			idx.MemTree.Insert(key, ptr)
 		}
@@ -274,13 +274,12 @@ func (tb *Table) Insert(row string) {
 	tb.TxnMngr.Commit(txn)
 }
 
-func extractColumnValue(row string, col string) interface{} {
+func (tb *Table) extractColumnValue(row string, colPos uint8) interface{} {
 
     parts := strings.Split(row, SEPARATOR)
 
-    pos, colType := findColumnPosAndType(col)
-
-    value := parts[pos]
+    colType, _, _ := tb.findColumnTypeAndNameFromPos(int(colPos))
+    value := parts[colPos]
 
     switch colType {
 
@@ -298,30 +297,34 @@ func extractColumnValue(row string, col string) interface{} {
     return nil
 }
 
-func (tb *Table)findColumnPosAndType(col string) (bool, int, ColumnType){
-	columns := tb.TableSchema.columns
-	for i=0; i<len(columns); i++{
-		if columns[i].columnName == col{
-			return true, i,columns[i].columnType
+func (tb *Table) FindColumnTypeAndPos(col string) (ColumnType, uint8, bool){
+	columns := tb.TableSchema.Columns
+	for i:=0; i<len(columns); i++{
+		if columns[i].ColumnName == col{
+			return columns[i].ColumnType, uint8(i), true
 		}
 	}
 	log.Printf("The column [%col] couldn't be found in table schema!", col)
 
-	return false, 0, nil
+	return -1, uint8(0), false
 }
 
-func (tb *Table) CreateIndex(name string, columns []string) {
-  for _, column := range columns{
-		fileName := t.Name + "_" + column + ".idx"
+func (tb *Table) findColumnTypeAndNameFromPos(pos int) (ColumnType, string, bool){
+	columns := tb.TableSchema.Columns
+	if pos > len(columns){
+		return -1, "", false
+	}
+	col := columns[pos]
+	return col.ColumnType, col.ColumnName, true
+}
 
-		ok, colPos, colType := tb.findColumnPosAndType(column)
 
-		indexCata := IndexCata{
-			IndexFile: fileName,
-			IndexName: name,
-			ColumnPos: colPos,
-		}
 
+func (tb *Table) CreateIndex(name string, columnNames []string) {
+  for _, colName := range columnNames{
+		fileName := tb.TableName + "_" + colName + ".idx"
+
+		colType, colPos, ok := tb.FindColumnTypeAndPos(colName)
 		if !ok{
 			return
 		}
@@ -334,48 +337,49 @@ func (tb *Table) CreateIndex(name string, columns []string) {
 		}
 
 		tree := BPlusTree{
-			IndexHeader: *indexHeader,
-			BufferPool: *tb.bufferPool,
+			IndexHeader: &indexHeader,
 		}
 
 
 		index := &Index{
 			Name: name,
-			TableId: t.TableId,
-			Column: column,
+			TableName: tb.TableName,
+			ColumnPos: uint8(colPos),
 			FileName: fileName,
-			MemTree: tree,
+			MemTree: &tree,
 		}
 
-		tree.TreePath = &index.FileName
+		tree.TreePath = index.FileName
 
-		tb.Indexes = append(tb.Indexes, index)
+		tb.Indexes[colName] = index
   }
 }
 
 func (tb *Table) MakeIndexes(){
 	for _, index := range(tb.Indexes){
-		tb.MakeIndexMemTreeFromTableFile(&index)
+		tb.MakeIndexMemTreeFromTableFile(index)
 	}
 }
 
-func (tb *Table) MakeIndexMemTreeFromTableFile(idx *Index) {
+func (tb *Table) MakeIndexMemTreeFromTableFile(idx *Index, tablePath string) {
 
     for pageId := uint32(0); pageId <= tb.LastPageId; pageId++ {
 
-        page := tb.bufferpool.FetchPage(pageId, dbPath+"/"+tb.TableName)
-
+        page, ok := tb.bufferpool.FetchPage(pageId, tablePath)
+        if !ok{
+					continue
+				}
         header := page.Read_header()
 
-        for slot := 0; slot < int(header.rowCount); slot++ {
+        for slot := 0; slot < int(header.RowCount); slot++ {
 
-            if page.isSlotDead(slot) {
+            if page.SlotDead(slot) {
                 continue
             }
 
-            row := page.read_row(slot)
+            row := page.Read_row(slot)
 
-            key := extractColumnValue(row, idx.Column)
+            key := tb.extractColumnValue(string(row), idx.ColumnPos)
 
             encoded := EncodeKey(key, idx.MemTree.IndexHeader.KeyType)
 
@@ -385,13 +389,13 @@ func (tb *Table) MakeIndexMemTreeFromTableFile(idx *Index) {
             }
 
             idx.MemTree.Insert(encoded, ptr)
-        }
+					}
     }
 }
 
 func (t *Table) FindByIndex(column string, key []byte) *Row {
 
-	idx := t.Indexes.indexes[column]
+	idx := t.Indexes[column]
 
 	ptr := idx.MemTree.Search(key)
 

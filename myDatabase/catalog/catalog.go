@@ -105,7 +105,7 @@ func (clg *CatalogManager) LoadDatabaseCatalog(){
 		}
 	}
 
-	return clg
+	//return clg
 }
 
 func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *CatalogEntry){

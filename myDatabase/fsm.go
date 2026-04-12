@@ -45,7 +45,7 @@ func (fsm *FSMManager) FillFsms(db *Database_Manager, tableNames []string){
 	 }
 }
 
-func UpdateFSM(fsmPage *Page, tablePgId uint32, writtenLen uint16){
+func (fsm *FSMManager)UpdateFSM(fsmPage *Page, tablePgId uint32, writtenLen uint16){
     header := fsmPage.Read_header()
 
 		for s := 0; s<=int(header.RowCount); s++{
@@ -54,7 +54,7 @@ func UpdateFSM(fsmPage *Page, tablePgId uint32, writtenLen uint16){
 				freeBytes :=binary.LittleEndian.Uint16(row[4:6])
 
         
-				fsmPage.Delete_row(s)
+				fsmPage.DeleteRow(s)
 				freeBytes += writtenLen
 				binary.LittleEndian.PutUint32(row[0:4], pageId)
 				binary.LittleEndian.PutUint16(row[4:6], freeBytes)

@@ -12,6 +12,7 @@ const (
   WAL_INSERT uint8 = iota
 	WAL_DELETE
 	WAL_UPDATE
+	WAL_UPDATEINPLACE
 	WAL_PAGE_SPLIT
 )
 
@@ -21,7 +22,7 @@ type WalRecord struct{
 	TableName string
 	PageId uint32
 	Operation uint8
-	DataSize uint32
+	DataSize uint16
 	Data []byte
 }
 
@@ -338,6 +339,47 @@ func (wal *WalManager) Undo(log WalRecord, db *Database_Manager){
 		if !exists{
 		  return
 		}
-		page.Delete_row(s)
+		page.DeleteRow(s)
 }
+
+func (wal *WalManager) LogDelete(tableName string, resType ResourceType, rowId RowId, deletedBytes []byte){
+  rec := &WalRecord{
+		ResourceType: resType,
+		TableName: tableName,
+		PageId: rowId.PageId,
+		Operation: WAL_DELETE,
+		DataSize: uint16(len(deletedBytes)),
+		Data: deletedBytes,
+	}
+
+	wal.Log(rec)
+}
+
+func (wal *WalManager) LogUpdateInPlace(tableName string, resType ResourceType, newRowId RowId, newData []byte, oldData []byte){
+  rec := &WalRecord{
+		ResourceType: resType,
+		TableName: tableName,
+		PageId: newRowId.PageId,
+		Operation: WAL_UPDATEINPLACE,
+		DataSize: uint16(len(newData)),
+		Data: newData,
+	}
+
+	wal.Log(rec)
+}
+
+func (wal *WalManager) LogInsert(tableName string, resType ResourceType, newRowId RowId, writtenData []byte){
+  rec := &WalRecord{
+		ResourceType: resType,
+		TableName: tableName,
+		PageId: newRowId.PageId,
+		Operation: WAL_INSERT,
+		DataSize: uint16(len(writtenData)),
+		Data: writtenData,
+	}
+
+	wal.Log(rec)
+}
+
+
 

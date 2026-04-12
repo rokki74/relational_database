@@ -1,8 +1,8 @@
 package sqlCompiler
 
-import(
+import (
 	"log"
-	"real_dbms/myDatabase/system"
+	"strings"
 )
 
 type Statement interface{
@@ -24,19 +24,17 @@ type CreateTBLStmt struct{
 type CreateIDXStmt struct{
   ParentTableName string
   IDXName string
-	Columns string
+	Columns []string
 }
 
 type InsertStmt struct {
-    ParentDBName string
-	Table	Table   string
+	  TBLName   string
     Columns []string
     Values  []Expr
 }
 
 type DeleteStmt struct {
-   ParentDBName string
-    Table string
+    TBLName string
     Where Expr
 }
 
@@ -48,16 +46,14 @@ const (
 )
 
 type UpdateStmt struct {
-	ParentDBName string
-	Table string
+	TBLName string
 	Set   map[string]Expr
 	Where Expr
 }
 
 type SelectStmt struct{
-  ParentDBName string
 	Columns []string 
-	Table string 
+	TBLName string 
 	Where Expr
 }
 
@@ -65,10 +61,10 @@ func (*SelectStmt) stmtNode(){}
 func (*UpdateStmt) stmtNode(){}
 func (*DeleteStmt) stmtNode(){}
 func (*InsertStmt) stmtNode(){}
-func (*CreateStmt) stmtNode(){}
 func (*CreateDBStmt) stmtNode(){}
 func (*CreateIDXStmt) stmtNode(){}
 func (*CreateTBLStmt) stmtNode(){}
+func (*UseStmt) stmtNode(){}
 
 type Expr interface{}
 
@@ -219,10 +215,10 @@ func (p *Parser) parsePrimary() (Expr, bool) {
     }
 }
 
-func (p *Parser) ParseStatement(e *Executor) Statement{
+func (p *Parser) ParseStatement() Statement{
 	switch p.curToken.Type{
 	case USE:
-		p.ParseUse(e)
+		return p.ParseUse()
 	case SELECT:
 		return p.parseSelect()
 	case UPDATE:
@@ -239,14 +235,15 @@ func (p *Parser) ParseStatement(e *Executor) Statement{
  	}
 }
 
-func (p *Parser) ParseUse(e *Executor) Statement{
+func (p *Parser) ParseUse() Statement{
 	p.expect(USE)
+	stmt := &UseStmt{}
+	stmt.DBName = p.curToken.Value
 	p.expect(IDENT)
-	e.session.CurrentDB = p.curToken.Value
-	return p.ParseStatement(e)
+	return stmt
 }
 
-func (p *Parser) parseSelect(e *Executor) Statement{
+func (p *Parser) parseSelect() Statement{
 	stmt := &SelectStmt{}
 	p.expect(SELECT)
 	columns := p.parseColumns()
@@ -255,7 +252,7 @@ func (p *Parser) parseSelect(e *Executor) Statement{
 	p.expect(FROM)
 	table := p.curToken.Value
 	p.expect(IDENT)
-	stmt.Table = table
+	stmt.TBLName = table
 	
 	if p.match(WHERE){
 		expr, ok := p.parseExpression(0)
@@ -272,7 +269,7 @@ func (p *Parser) parseUpdate() Statement{
 	stmt.Set = make(map[string]Expr)
 
   p.expect(UPDATE)
-	stmt.Table = p.curToken.Value
+	stmt.TBLName = p.curToken.Value
 	p.expect(IDENT)
 
 	p.expect(SET)
@@ -309,7 +306,7 @@ func (p *Parser) parseInsert() Statement{
 	p.expect(INSERT)
 	p.expect(INTO)
 
-	stmt.Table = p.curToken.Value
+	stmt.TBLName = p.curToken.Value
 	p.expect(IDENT)
 	p.expect(LPAREN)
 
@@ -339,7 +336,7 @@ func (p *Parser) parseDelete() Statement{
 
 	p.expect(DELETE)
 	p.expect(FROM)
-	stmt.Table = p.curToken.Value
+	stmt.TBLName = p.curToken.Value
 	p.expect(IDENT)
 	
 	if p.match(WHERE){
@@ -355,13 +352,14 @@ func (p *Parser) parseDelete() Statement{
 func (p *Parser) parseCreate() Statement{
 	p.expect(CREATE)
 	identType := p.curToken.Value
+	identType = strings.ToUpper(identType)
 	p.expect(IDENT)
 	switch identType{
-	case TABLE:
-		return p.ParseCreateTable()
-	case DATABASE:
+	case "TABLE":
+		return p.parseCreateTable()
+	case "DATABASE":
 		return p.parseCreateDatabase()
-	case INDEX:
+	case "INDEX":
 		return p.parseCreateIndex()
 	default:
 	  log.Printf("Cannot create unknown object on create statement, %v", identType)
@@ -371,14 +369,14 @@ func (p *Parser) parseCreate() Statement{
 
 func (p *Parser) parseCreateDatabase() Statement{
  databaseName := p.curToken.Value
- return CreateDBStmt{
+ return &CreateDBStmt{
    DBName: databaseName,
  } 
 }
 
 func (p *Parser) parseCreateTable() Statement{
  tableName := p.curToken.Value
- return CreateTBLStmt{
+ return &CreateTBLStmt{
    TBLName: tableName,
  }
 }
@@ -392,26 +390,18 @@ func (p *Parser) parseCreateIndex() Statement{
 	cols := make([]string, 0)
 	for {
 	  col := p.curToken.Value
-		cols := append(cols, col)
+		cols = append(cols, col)
 		p.expect(COMMA)
 
-		if p.curTokenType == RPAREN{
+		if p.curToken.Type == RPAREN{
 		  break
 		}
 	}
 	p.expect(RPAREN)
-  colmn := p.curToken.Value
-	return CreateIDXStmt{
+	return &CreateIDXStmt{
+		ParentTableName: tableName,
 	  IDXName: indexName,
 		Columns: cols,
 	}
 }
 
-func Junk(){
-	  if dbMngr, exists := e.syst.GetDatabase(dbName); !exists{
-			log.Printf("Database Doesn't exist for executing statement!")
-			return nil
-		}else{
-					e.syst.NewSession(dbMngr)
-					e.session.CurrentDB = dbMngr.dbName
-}

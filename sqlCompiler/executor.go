@@ -2,14 +2,28 @@ package sqlCompiler
 
 import (
 	"log"
-	"real_dbms/myDatabase/system"
 	"real_dbms/myDatabase"
+	"real_dbms/myDatabase/system"
+	"strconv"
 	"strings"
+	"encoding/binary"
 )
 
+var TABLEResource uint8 = 0 
+var INDEXResource uint8 = 1
+
 type Executor struct{
-	session *system.Session
+	CurrentDB *myDatabase.Database_Manager
 	syst *system.DBSystem
+}
+
+type TupData struct{
+	Type myDatabase.ColumnType
+	Value string
+}
+
+type Tuple struct{
+	Tup map[string]TupData
 }
 
 func (e *Executor) Runner(clientData string, c chan [][]string) [][]string{
@@ -18,7 +32,7 @@ func (e *Executor) Runner(clientData string, c chan [][]string) [][]string{
 	for i := 0; i < len(sql); i++{
 	  lexer := NewLexer(sql[i])
 		parser := NewParser(lexer)
-		stmt := parser.ParseStatement(e)
+		stmt := parser.ParseStatement()
 		c <- e.Execute(stmt)
 	}
 
@@ -27,7 +41,8 @@ func (e *Executor) Runner(clientData string, c chan [][]string) [][]string{
 
 func (e *Executor) Execute(stmt Statement) [][]string {
     switch s := stmt.(type) {
-
+    case *UseStmt:
+			e.execUseStmt(s)
     case *SelectStmt:
 			vals, ok := e.execSelect(s)
 				if !ok{
@@ -57,13 +72,25 @@ func (e *Executor) Execute(stmt Statement) [][]string {
 		return nil
 }
 
+func (e *Executor) execUseStmt(stmt *UseStmt){
+	dbMngr, ok := e.syst.GetDatabase(stmt.DBName)
+	if !ok{
+		log.Printf("Database unavailable for table deletion operation!")
+		return
+	}
+
+	e.CurrentDB = dbMngr
+}
+
 func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
-		db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
-		if !ok{
-			log.Printf("Database unavailable for table deletion operation!")
+	  if e.CurrentDB == nil{
+			log.Printf("Database is not set, cannot execute unnamed database for the statement")
 			return nil, false
 		}
-    table, exists := db.GetTable(stmt.Table)
+    
+		db := e.CurrentDB
+
+    table, exists := db.GetTable(stmt.TBLName)
 		if !exists{
 			log.Printf("Table does not exist")
 			return nil, false
@@ -71,28 +98,28 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 
     var results [][]string
 
-    // full table scan (start simple)
+    tablePath, okay := db.GetTablePath(table.TableName)
+    if !okay{
+			return nil, false
+		}
 		for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
-        tablePath, okay := db.GetTablePath(table.TableName)
-				if !okay{
-					return nil, false
-				}
         page, present := db.BufferPool.FetchPage(pageID, tablePath)
         if !present{
 					log.Printf("Page not found! [TablePath: %v, PageId: %v] ", tablePath, pageID)
-					return nil, false
+					continue
 				}
 				header := page.Read_header()
-        for slot := 0; slot < int(header.RowCount); slot++ {
 
-            if !page.IsAlive(slot) {
+        for s := 0; s < int(header.RowCount); s++ {
+            if !page.SlotDead(s) {
                 continue
             }
 
-            tuple := page.Read_row(slot)
-
+            tupleBs := page.Read_row(s)
+						//Build tuple
+						tuple := e.buildTup(table.TableSchema, tupleBs)
             if stmt.Where != nil {
-                if !e.evalExpr(stmt.Where, tuple) {
+                if !e.evalExpr(stmt.Where, tupleBs) {
                     continue
                 }
             }
@@ -105,49 +132,109 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 }
 
 func (e *Executor) execInsert(stmt *InsertStmt) {
-		db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
-		if !ok{
-			log.Printf("Database unavailable for table deletion operation!")
+	  if e.CurrentDB == nil{
+			log.Printf("Database is not set, cannot execute unnamed database for the statement")
 			return
 		}
-    table, exists := db.GetTable(stmt.Table)
+    
+		db := e.CurrentDB
+    table, exists := db.GetTable(stmt.TBLName)
 		if !exists{
 			log.Printf("Table does not exist")
 			return
 		}
 
-    // 1. Evaluate values
-    values := e.evalInsertValues(stmt.Values)
+    colTypes := make([]myDatabase.ColumnType, len(stmt.Columns))
+		colNames := make([]string, len(stmt.Columns))
+    for _, colName := range stmt.Columns{
+			colType, _, prsnt := table.FindColumnTypeAndPos(colName)
+			if !prsnt{
+				continue
+			}
+			colTypes = append(colTypes, colType)
+			colNames = append(colNames, colName)
+		} 
 
-    // 2. Encode tuple
-		tupleBytes := table.EncodeTuple(stmt.Column, values)
+    // 1. Evaluate values
+    values := make([]string, 0)
+		for _, val := range stmt.Values{
+			values = append(values, e.evalValue(val, Tuple{}))
+		}
+
+    // 2. Encode tupleBytes/serializedBs 
+		tupleBytes := table.SerializeColumnValues(values, colTypes)
 
     // 3. Find page with space (FSM)
-		tblPath := db.GetObjPath(table.TableName, TABLETYPE)
-		fsmPath := db.GetObjPath(table.TableName, FSMTYPE)
+		tblPath, _ := db.GetTablePath(table.TableName)
+		fsmPath, _ := db.GetObjectPath(table.TableName, myDatabase.FSMTYPE)
     pageID, fsmPage, availed := db.BufferPool.FittingPage(fsmPath, uint16(len(tupleBytes)))
-		if !availed{
-			return
+		if availed{
+				page, got := db.BufferPool.FetchPage(pageID, tblPath)
+				if got{
+					rowId, _ := page.Insert_row(tupleBytes)
+					db.BufferPool.Fsm.UpdateFSM(fsmPage, pageID, uint16(len(tupleBytes)))
+					db.BufferPool.SavePage(fsmPath, *fsmPage)
+
+					// 6. WAL logging
+					db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
+
+					// 7. Update indexes
+					//e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
+          db.InsertIntoIndexes(&table, *rowId, tupleBytes)
+					log.Printf("Insert was a success!")
+				}
+
+				// fallback: allocate new page
+				pg := db.BufferPool.AllocatePage(&table)
+				db.BufferPool.SavePage(tblPath, *pg)
+				// 5. Insert into page
+				rowId, _ := page.Insert_row(tupleBytes)
+				
+				// 6. WAL logging
+				db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
+
+				// 7. Update indexes
+				//e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
+      db.InsertIntoIndexes(&table, *rowId, tupleBytes)
+			log.Printf("Insert was a success!")
+		   return
 		}
     
-		page, found := db.BufferPool.FetchPage(pageID, tblPath)
-		if found{
-			page.Insert_row(tupleBytes)
-			db.BufferPool.fsm.UpdateFSM(&fsmPage, pageID, uint16(stmt.Values))
-			db.BufferPool.SavePage(fsmPath, fsmPage)
+		page, found := db.BufferPool.FetchPage(table.LastPageId, tblPath)
+		if !found{
+			
+			log.Printf("Insert was unsuccessful!, The BufferPool wouldn't get the lastPage of a table thru id[%v]", table.LastPageId)
+			return
+		}
+    // 5. Insert into page
+    rowId, possible := page.Insert_row(tupleBytes)
+		if !possible{
+			pg := db.BufferPool.AllocatePage(&table)
+			rowId, done := pg.Insert_row(tupleBytes)
+			if !done{
+				log.Printf("Totally impossible to make an insert, this was an attempt on newly allocated page!")
+				return
+			}
+			db.BufferPool.SavePage(tblPath, *pg)
+
+			// 6. WAL logging
+			db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
+
+			// 7. Update indexes
+			e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
+			
+
+			log.Printf("Insert was a success!")
+			return
 		}
 
-    // fallback: allocate new page
-		pg := db.BufferPool.AllocatePage(&table)
-    db.BufferPool.SavePage(tblPath, *pg)
-    // 5. Insert into page
-    slot := page.Insert_row(tupleBytes)
-
     // 6. WAL logging
-    db.WAL.LogInsert(pageID, slot, tupleBytes)
+    db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
 
     // 7. Update indexes
-    e.db.UpdateIndexesUpdateIndexes(table, values, pageID, slot)
+    e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
+
+		log.Printf("Insert was a success!")
 }
 
 func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
@@ -158,6 +245,7 @@ func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
         left := e.evalValue(ex.Left, tuple)
         right := e.evalValue(ex.Right, tuple)
 
+				log.Printf("Just for the fun of it let me visualize how the evalExpr output looks like, here it is:\n %v\n", e.evalExpr(expr, tuple))
         switch ex.Op {
 
         case EQ:
@@ -194,12 +282,36 @@ func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
     return false
 }
 
+
 func (e *Executor) evalValue(expr Expr, tuple Tuple) string {
+
+	switch ex := expr.(type) {
+
+	case *Identifier:
+		val, ok := tuple.Get(ex.Value)
+		if !ok {
+			return ""
+		}
+		return val.Value
+
+	case *NumberLiteral:
+		return ex.Value
+
+	case *StringLiteral:
+		return ex.Value
+	}
+
+	return ""
+}
+
+
+/*
+func (e *Executor) evalValue(expr Expr, tuple []byte) string {
 
     switch ex := expr.(type) {
 
     case *Identifier:
-        return tuple.Get(ex.Name)
+        return ""
 
     case *NumberLiteral:
         return ex.Value
@@ -209,15 +321,21 @@ func (e *Executor) evalValue(expr Expr, tuple Tuple) string {
 
     default:
         log.Printf("invalid value expression")
+				return "" 
     }
 }
+*/
 
 func (e *Executor) project(columns []string, tuple Tuple) []string {
 
     var row []string
 
     for _, col := range columns {
-        row = append(row, tuple.Get(col))
+			  tupData, ok := tuple.Get(col)
+				if !ok{
+					continue
+				}
+        row = append(row, tupData.Value)
     }
 
     return row
@@ -227,7 +345,7 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
     var values []string
 
     for _, expr := range exprs {
-        v := e.evalValue(expr, nil) // no tuple needed
+        v := e.evalValue(expr, Tuple{}) // no tuple needed
         values = append(values, v)
     }
 
@@ -235,143 +353,288 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
 }
 
 func (e Executor) execDelete(stmt *DeleteStmt){
-	db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
-	if !ok{
-		log.Printf("Database unavailable for table deletion operation!")
+  if e.CurrentDB == nil{
+		log.Printf("Database not selected!")
 		return
 	}
-	table, exists := db.GetTable(stmt.Table)
+  
+	db := e.CurrentDB
+	table, exists := db.GetTable(stmt.TBLName)
 	if !exists{
 		log.Printf("Database does not exist, cannot delete")
 		return
 	}
 
 	for pageId := uint32(0); pageId <= table.LastPageId; pageId++{
-		page := db.BufferPool.FetchPage(pageId, db.GetTablePath(table.TableName))
-		header := page.read_header()
+		tablePath, ok := db.GetTablePath(table.TableName)
+		if !ok{
+			break
+		}
 
-		for s :=0; s<header.rowCount; s++{
+		page, exists := db.BufferPool.FetchPage(pageId, tablePath) 
+		if !exists{
+			continue
+		}
+		header := page.Read_header()
+    
+		for s :=0; s<int(header.RowCount); s++{
 			if page.SlotDead(s){continue}
 
-			rowId := RowId{pageId, s}
+			rowId := myDatabase.RowId{PageId:pageId, SlotId:uint16(s)}
 
+			staleBytes := page.Read_row(s)
 			if stmt.Where !=nil{
-				if !e.evalExpr(stmt.Where, rowId){
+				if !e.evalExpr(stmt.Where, staleBytes){
 					continue
 				}
 			}
 
-			page.KillSlotIndex(s)
-			db.WAL.LogDelete(pageId, slot)
+      page.Delete_row(s)
+			db.WAL.LogDelete(table.TableName, myDatabase.ResourceType(TABLEResource), rowId, staleBytes)
+
+      db.DeleteFromIndexes(&table, rowId, staleBytes)
 		}
 	}
 }
 
 
 func (e *Executor) execUpdate(stmt *UpdateStmt) {
-		db, ok := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
-		if !ok{
-			log.Printf("Database unavailable for table deletion operation!")
+	  if e.CurrentDB == nil{
+			log.Printf("Database is not set, cannot execute unnamed database for the statement")
 			return
 		}
-    table, exists := db.GetTable(stmt.Table)
+		db := e.CurrentDB
+    table, exists := db.GetTable(stmt.TBLName)
 		if !exists{
 			log.Printf("Cannot update, --Database doesn't exist!")
 			return
 		}
 
+    tablePath, ok := db.GetTablePath(table.TableName)
+		if !ok{
+			log.Printf("table doesn't exist!")
+			return
+		}
     for pageID := uint32(0); pageID <=table.LastPageId; pageID++ {
-
-        page := db.BufferPool.FetchPage(pageID)
-
-        for slot := 0; slot < page.NumSlots(); slot++ {
-
-            if !page.IsAlive(slot) {
+        page, exists := db.BufferPool.FetchPage(pageID, tablePath)
+				if !exists{
+					continue
+				}
+        
+				header := page.Read_header()
+        for slot := 0; slot < int(header.RowCount); slot++ {
+            if page.SlotDead(slot) {
+							  log.Printf("slot found dead!")
                 continue
             }
 
-            oldTuple := page.ReadTuple(slot)
+            oldBytes := page.Read_row(slot)
+            oldTup := e.buildTup(table.TableSchema, oldBytes)
 
             if stmt.Where != nil {
-                if !e.evalExpr(stmt.Where, oldTuple) {
+                if !e.evalExpr(stmt.Where, oldBytes) {
                     continue
                 }
             }
 
             // 1. Build updated tuple
-            newValues := e.applyUpdate(stmt, oldTuple)
+            newTup := e.applyUpdate(stmt, oldTup)
 
-            newTupleBytes := table.EncodeTupleFromMap(newValues)
+            newTupleBytes := newTup.turnToBytes(table.TableSchema)
 
+
+						rowId := myDatabase.RowId{pageID, uint16(slot)}
             // 2. Decide: in-place or move
-            if page.CanFitInPlace(slot, len(newTupleBytes)) {
-
-                page.UpdateTuple(slot, newTupleBytes)
-
-                db.WAL.LogUpdateInPlace(pageID, slot, newTupleBytes)
-
-            } else {
-
+						updated := page.UpdateRowInPlace(&rowId, newTupleBytes)
+						if updated{
+                db.WAL.LogUpdateInPlace(table.TableName, myDatabase.ResourceType(TABLEResource), rowId, newTupleBytes, oldBytes)
+                // update indexes
+                //e.CurrentDB.UpdateIndexes(table, rowId, newValues)
+								db.UpdateIndexes(
+											&table,
+											rowId,
+											rowId,
+											oldBytes,
+											newTupleBytes,
+											stmt.GetUpdatedColumns(), // helper
+									)
+							} else {
                 // mark old as deleted
-                page.MarkDeleted(slot)
-                db.WAL.LogDelete(pageID, slot)
+								forDeletion := page.Read_row(slot)
+                page.Delete_row(slot)
+
+                db.WAL.LogDelete(table.TableName, myDatabase.ResourceType(TABLEResource), rowId, forDeletion)
+                db.DeleteFromIndexes(&table, rowId, oldBytes)
 
                 // insert new tuple
-                newPageID := db.FSM.FindPageWithSpace(table.ID, len(newTupleBytes))
-                if newPageID == -1 {
-                    newPageID = db.AllocatePage(table.ID)
-                }
+								var freePage myDatabase.Page
+								pgId, fsmPage, fitting := db.BufferPool.FittingPage(tablePath, uint16(len(newTupleBytes)))
+								if fitting{
+                  freePage, exists = db.BufferPool.FetchPage(pgId, tablePath)
+									if !exists{
+										continue
+									}
+									rowId, _ := freePage.Insert_row(newTupleBytes)
+                  db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, newTupleBytes)
+									db.BufferPool.Fsm.UpdateFSM(fsmPage, pgId, uint16(len(newTupleBytes)))
+                // update indexes
+                //e.CurrentDB.UpdateIndexes(table, *rowId, newValues)
+                db.InsertIntoIndexes(&table, *newRowId, newTupleBytes)
+								}
 
-                newPage := db.BufferPool.Fetch(newPageID)
-                newSlot := newPage.InsertTuple(newTupleBytes)
-
-                db.WAL.LogInsert(newPageID, newSlot, newTupleBytes)
+								newPage := db.BufferPool.AllocatePage(&table)
+                rowId, _ := newPage.Insert_row(newTupleBytes)
+                 db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, newTupleBytes)
 
                 // update indexes
-                e.updateIndexes(table, newValues, newPageID, newSlot)
+                //e.CurrentDB.UpdateIndexes(table, *rowId, newValues)
+                db.InsertIntoIndexes(&table, *newRowId, newTupleBytes)
             }
         }
     }
 }
 
-func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) map[string]string {
+func (stmt *UpdateStmt) GetUpdatedColumns() []string {
+	var cols []string
+	for col := range stmt.Set {
+		cols = append(cols, col)
+	}
+	return cols
+}
+
+func (tp *Tuple) Get(colName string) (TupData, bool){
+	v, ok := tp.Tup[colName]
+	if !ok{
+		return TupData{}, false
+	}
+
+	return v, false
+}
+
+func (e Executor) buildTup(schema myDatabase.Schema, rowBs []byte) Tuple{
+ columns := schema.Columns 
+ tuple := Tuple{}
+ 
+ offset := 0
+ for _, col := range columns{
+	 switch col.ColumnType{
+	   case myDatabase.BOOLEAN:
+			 val := rowBs[offset]
+			 if val ==0{
+				 tuple.Tup[col.ColumnName] = TupData{myDatabase.BOOLEAN, "false"} 
+			 }else{
+				 tuple.Tup[col.ColumnName] = TupData{myDatabase.BOOLEAN, "true"} 
+			 }
+			 offset = offset + 1
+	   case myDatabase.INT:
+       val := rowBs[offset:offset+4]
+       tuple.Tup[col.ColumnName] = TupData{myDatabase.INT, string(val)} 
+			 offset = offset+4
+		 case myDatabase.STRING:
+			 val := rowBs[offset:offset+4]
+			 tuple.Tup[col.ColumnName] = TupData{myDatabase.STRING, string(val)}
+			 offset = offset+4
+	 }
+ }
+
+ return tuple
+}
+
+func (tp *Tuple) turnToBytes(schema myDatabase.Schema) []byte {
+
+	var result []byte
+
+	for _, col := range schema.Columns {
+
+		val := tp.Tup[col.ColumnName]
+
+		switch col.ColumnType {
+
+		case myDatabase.INT:
+			i, _ := strconv.Atoi(val.Value)
+			buf := make([]byte, 4)
+			binary.LittleEndian.PutUint32(buf, uint32(i))
+			result = append(result, buf...)
+
+		case myDatabase.STRING:
+			str := []byte(val.Value)
+			result = append(result, byte(len(str)))
+			result = append(result, str...)
+		}
+	}
+
+	return result
+}
+
+func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
+
+	// ✅ Create new tuple (deep copy)
+	newTuple := Tuple{
+		Tup: make(map[string]TupData),
+	}
+
+	// 1. Copy old values
+	for col, data := range tuple.Tup {
+		newTuple.Tup[col] = data
+	}
+
+	// 2. Apply updates
+	for col, expr := range stmt.Set {
+
+		oldVal, exists := newTuple.Tup[col]
+		if !exists {
+			continue
+		}
+
+		newVal := e.evalValue(expr, nil) // i shall improve this later
+
+		newTuple.Tup[col] = TupData{
+			Type:  oldVal.Type,
+			Value: newVal,
+		}
+	}
+
+	return newTuple
+}
+
+/*
+func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 
     result := make(map[string]string)
 
     // copy old values
-    for k, v := range tuple.Values {
-        result[k] = v
+    for k, v := range tuple.Tup {
+        result[k] = v.Value
     }
 
     // apply SET clause
     for col, expr := range stmt.Set {
-        result[col] = e.evalValue(expr, tuple)
+        result[col] = e.evalValue(expr, tuple.turnToBytes())
     }
 
     return result
 }
+*/
 
 func (e *Executor) execCreateDB(stmt Statement){
-	dbName := stmt.DBName
-	e.syst.CreateDatabase(dbName)
+	e.syst.CreateDatabase(stmt.DBName)
 }
 
 func (e *Executor) execCreateTbl(stmt Statement){
-  dbMngr, exists := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
-	if !exists{
-		log.Printf("Unable to create table in a non-existent database!")
-		return
-	}
+  if e.CurrentDB ==nil{
+			log.Printf("Database is not set, cannot execute unnamed database for the statement")
+			return
+		}
+  dbMngr := e.CurrentDB
   dbMngr.CreateTable(stmt.TBLName)
 }
 
 func (e *Executor) execCreateIDX(stmt Statement){
-   dbMngr, exists := e.syst.GetDatabase(e.session.CurrentDB.Dbname)
-	 if !exists{
-		 log.Printf("Can't create an index on non-existent database")
-		 return
-	 }
-
+  if e.CurrentDB == nil{
+			log.Printf("Database is not set, cannot execute unnamed database for the statement")
+			return
+		}
+   dbMngr := e.CurrentDB
 	 table, ok := dbMngr.GetTable(stmt.ParentTableName)
 	 if !ok{
 		 log.Printf("Table not available, might be deleted! %v", stmt.ParentTableName)
@@ -379,4 +642,7 @@ func (e *Executor) execCreateIDX(stmt Statement){
 
 	 table.CreateIndex(stmt.IDXName, stmt.Columns)
 }
+
+
+
 

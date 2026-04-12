@@ -16,7 +16,6 @@ type Database_Manager struct{
 	Catalog *CatalogManager
 	Pager *Pager
 	WAL *WalManager
-	FsmManager *FSMManager
 	TransactionManager TransactionManager
 	DbPath string
 }
@@ -36,12 +35,11 @@ func (syst *DBSystem) CreateDatabase(name string) bool{
 func (db *Database_Manager) InitDB(){
 	db.WAL = NewWalManager(system.GetSystemPath()+"/"+db.Dbname)
 	db.DbPath = system.GetSystemPath()+"/"+db.Dbname
-	db.FsmManager = NewFsmManager()
 
 	db.BufferPool = &BufferPool{
 		Pager: db.Pager,
 		capacity: 0,
-		fsm: db.FsmManager,
+		fsm: NewFsmManager(),
 	}
 
 	db.NewTransactionManager()
@@ -121,8 +119,94 @@ func (db *Database_Manager) FillFSM(){
   db.FsmManager.FillFsms(db, tableNames)
 }
 
-func UpdateIndexes(table *Table, values, pageID uint32, slot Slot){
+func extractKey(row []byte, colPos uint8, colType ColumnType) []byte {
+	offset := 0
 
+	// ⚠️ This depends on your row layout
+	// You likely need a schema-aware offset calculation
+
+	switch colType {
+	case INT:
+		return row[offset : offset+4]
+
+	case STRING:
+		length := int(row[offset])
+		offset += 1
+		return row[offset : offset+length]
+	}
+
+	return nil
 }
+
+func (db *Database_Manager) DeleteFromIndexes(
+	tb *Table,
+	rowId RowId,
+	row []byte,
+) {
+	for _, index := range tb.Indexes {
+
+		tree := index.MemTree
+
+		key := extractKey(row, tree.IndexHeader.ColumnPos, tree.IndexHeader.KeyType)
+
+		tree.Delete(key, rowId)
+	}
+}
+
+func (db *Database_Manager) InsertIntoIndexes(
+	tb *Table,
+	rowId RowId,
+	row []byte,
+) {
+	for _, index := range tb.Indexes {
+
+		tree := index.MemTree
+
+		key := extractKey(row, tree.IndexHeader.ColumnPos, tree.IndexHeader.KeyType)
+
+		tree.Insert(key, rowId)
+	}
+}
+
+func (db *Database_Manager) UpdateIndexes(
+	tb *Table,
+	rowId RowId,
+	oldRow []byte,
+	newRow []byte,
+	updatedCols []string,
+) {
+
+	if len(tb.Indexes) == 0 {
+		return
+	}
+
+	for _, colName := range updatedCols {
+
+		index, ok := tb.Indexes[colName]
+		if !ok {
+			continue
+		}
+
+		tree := index.MemTree
+
+		colPos := tree.IndexHeader.ColumnPos
+		colType := tree.IndexHeader.KeyType
+
+		oldKey := extractKey(oldRow, colPos, colType)
+		newKey := extractKey(newRow, colPos, colType)
+
+		// If value didn't change → skip
+		if bytes.Equal(oldKey, newKey) {
+			continue
+		}
+
+		// 🔴 DELETE old entry
+		tree.Delete(oldKey, rowId)
+
+		// 🟢 INSERT new entry
+		tree.Insert(newKey, rowId)
+	}
+}
+
 
 
