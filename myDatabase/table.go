@@ -58,7 +58,7 @@ func (db *Database_Manager) createTable(name string, columns []Column) (Table, b
 	}
 
 		schm := Schema{
-		   columns: columns,
+		   Columns: columns,
      	}
 
    table :=  Table{
@@ -257,7 +257,7 @@ func (tb *Table) Insert(row string) {
 	 //the normal transaction flow can resume after wal being prioritized
 	 page.PageLSN = lsn
 	 pageId, SlotId := page.insert_row(row_bytes)
-	 tb.bufferpool.MarkDirty(tb.tableId, page.PageID)
+	 tb.bufferpool.MarkDirty(tb.TableName, page.PageID)
 
 	 ptr := &RowId{pageId, SlotId}
 

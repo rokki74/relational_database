@@ -118,8 +118,9 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
             tupleBs := page.Read_row(s)
 						//Build tuple
 						tuple := e.buildTup(table.TableSchema, tupleBs)
+						tp := rowByteIntoTuple(table.TableSchema, tupleBs)
             if stmt.Where != nil {
-                if !e.evalExpr(stmt.Where, tupleBs) {
+                if !e.evalExpr(stmt.Where, *tp) {
                     continue
                 }
             }
@@ -221,9 +222,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 			db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
 
 			// 7. Update indexes
-			e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
+			e.CurrentDB.InsertIntoIndexes(&table, *rowId, tupleBytes)
 			
-
 			log.Printf("Insert was a success!")
 			return
 		}
@@ -232,7 +232,7 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
     db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
 
     // 7. Update indexes
-    e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
+    e.CurrentDB.InsertIntoIndexes(&table, *rowId, tupleBytes)
 
 		log.Printf("Insert was a success!")
 }
@@ -288,11 +288,12 @@ func (e *Executor) evalValue(expr Expr, tuple Tuple) string {
 	switch ex := expr.(type) {
 
 	case *Identifier:
-		val, ok := tuple.Get(ex.Value)
+		/*val, ok := tuple.Get(ex.Value)
 		if !ok {
 			return ""
-		}
-		return val.Value
+		}*/
+		log.Printf("returning this for now but Identifier logic needed!")
+		return ex.Name
 
 	case *NumberLiteral:
 		return ex.Value
@@ -304,27 +305,6 @@ func (e *Executor) evalValue(expr Expr, tuple Tuple) string {
 	return ""
 }
 
-
-/*
-func (e *Executor) evalValue(expr Expr, tuple []byte) string {
-
-    switch ex := expr.(type) {
-
-    case *Identifier:
-        return ""
-
-    case *NumberLiteral:
-        return ex.Value
-
-    case *StringLiteral:
-        return ex.Value
-
-    default:
-        log.Printf("invalid value expression")
-				return "" 
-    }
-}
-*/
 
 func (e *Executor) project(columns []string, tuple Tuple) []string {
 
@@ -345,7 +325,7 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
     var values []string
 
     for _, expr := range exprs {
-        v := e.evalValue(expr, Tuple{}) // no tuple needed
+        v := e.evalValue(expr, Tuple{})
         values = append(values, v)
     }
 
@@ -384,7 +364,10 @@ func (e Executor) execDelete(stmt *DeleteStmt){
 
 			staleBytes := page.Read_row(s)
 			if stmt.Where !=nil{
-				if !e.evalExpr(stmt.Where, staleBytes){
+				tuple := Tuple{}
+				tuple.Tup = make(map[string]TupData)
+				stTuple := rowByteIntoTuple(table.TableSchema, staleBytes)
+				if !e.evalExpr(stmt.Where, *stTuple){
 					continue
 				}
 			}
@@ -430,9 +413,9 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 
             oldBytes := page.Read_row(slot)
             oldTup := e.buildTup(table.TableSchema, oldBytes)
-
+            tupl := rowByteIntoTuple(table.TableSchema, oldBytes)
             if stmt.Where != nil {
-                if !e.evalExpr(stmt.Where, oldBytes) {
+                if !e.evalExpr(stmt.Where, *tupl) {
                     continue
                 }
             }
@@ -453,10 +436,9 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 								db.UpdateIndexes(
 											&table,
 											rowId,
-											rowId,
 											oldBytes,
 											newTupleBytes,
-											stmt.GetUpdatedColumns(), // helper
+											stmt.GetUpdatedColumns(),
 									)
 							} else {
                 // mark old as deleted
@@ -470,16 +452,17 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 								var freePage myDatabase.Page
 								pgId, fsmPage, fitting := db.BufferPool.FittingPage(tablePath, uint16(len(newTupleBytes)))
 								if fitting{
-                  freePage, exists = db.BufferPool.FetchPage(pgId, tablePath)
+									fPage, exists := db.BufferPool.FetchPage(pgId, tablePath)
 									if !exists{
 										continue
 									}
+									freePage = *fPage
 									rowId, _ := freePage.Insert_row(newTupleBytes)
                   db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, newTupleBytes)
 									db.BufferPool.Fsm.UpdateFSM(fsmPage, pgId, uint16(len(newTupleBytes)))
                 // update indexes
                 //e.CurrentDB.UpdateIndexes(table, *rowId, newValues)
-                db.InsertIntoIndexes(&table, *newRowId, newTupleBytes)
+                db.InsertIntoIndexes(&table, *rowId, newTupleBytes)
 								}
 
 								newPage := db.BufferPool.AllocatePage(&table)
@@ -488,7 +471,7 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 
                 // update indexes
                 //e.CurrentDB.UpdateIndexes(table, *rowId, newValues)
-                db.InsertIntoIndexes(&table, *newRowId, newTupleBytes)
+                db.InsertIntoIndexes(&table, *rowId, newTupleBytes)
             }
         }
     }
@@ -540,6 +523,73 @@ func (e Executor) buildTup(schema myDatabase.Schema, rowBs []byte) Tuple{
  return tuple
 }
 
+func rowByteIntoTuple(schema myDatabase.Schema, rowBytes []byte) *Tuple{
+	tuple := &Tuple{}
+	offset := 0
+
+	colTypes := make([]myDatabase.ColumnType, 0)
+
+	round := 0
+	for round<len(schema.Columns){
+		colType := rowBytes[offset]
+		colTypes = append(colTypes, myDatabase.ColumnType(colType))
+		switch colType{
+		 case 0:
+			 value := rowBytes[offset]
+				var col_value string
+				if value ==1{
+					col_value = "true"
+				}else{
+					col_value = "false"
+				}
+				offset += 1
+
+				tpData := TupData{
+							myDatabase.ColumnType(colType),
+							col_value,
+			   }
+
+				 col := schema.Columns[round]
+				 tuple.Tup[col.ColumnName] = tpData
+				 if(colType == byte(col.ColumnType)){
+					 log.Printf("Mahn a lie is happening here, colType had to be = col.ColumnType at rowByteIntoTuple in executor")
+				 }
+		 case 1:
+				col_value := string(rowBytes[offset:offset+4])
+				offset += 4
+
+				tpData := TupData{
+							myDatabase.ColumnType(colType),
+							col_value,
+			   }
+
+				 col := schema.Columns[round]
+				 tuple.Tup[col.ColumnName] = tpData
+				 if(colType == byte(col.ColumnType)){
+					 log.Printf("Mahn a lie is happening here, colType had to be = col.ColumnType at rowByteIntoTuple in executor")
+				 }
+		 case 2:
+				var str_len uint16
+				str_len = binary.LittleEndian.Uint16(rowBytes[offset:offset+2])
+				offset += 2
+				col_value := string(rowBytes[offset:offset+int(str_len)])
+
+				tpData := TupData{
+							myDatabase.ColumnType(colType),
+							col_value,
+			   }
+
+				 col := schema.Columns[round]
+				 tuple.Tup[col.ColumnName] = tpData
+				 if(colType != byte(col.ColumnType)){
+					 log.Printf("Mahn a lie is happening here, colType had to be = col.ColumnType at rowByteIntoTuple in executor")
+				 }
+			}
+			round++
+	}
+	 return tuple
+}
+
 func (tp *Tuple) turnToBytes(schema myDatabase.Schema) []byte {
 
 	var result []byte
@@ -568,7 +618,6 @@ func (tp *Tuple) turnToBytes(schema myDatabase.Schema) []byte {
 
 func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 
-	// ✅ Create new tuple (deep copy)
 	newTuple := Tuple{
 		Tup: make(map[string]TupData),
 	}
@@ -586,7 +635,9 @@ func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 			continue
 		}
 
-		newVal := e.evalValue(expr, nil) // i shall improve this later
+		emptyTuple := Tuple{}
+		emptyTuple.Tup = make(map[string]TupData,0)
+		newVal := e.evalValue(expr, emptyTuple)
 
 		newTuple.Tup[col] = TupData{
 			Type:  oldVal.Type,
@@ -596,25 +647,6 @@ func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 
 	return newTuple
 }
-
-/*
-func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
-
-    result := make(map[string]string)
-
-    // copy old values
-    for k, v := range tuple.Tup {
-        result[k] = v.Value
-    }
-
-    // apply SET clause
-    for col, expr := range stmt.Set {
-        result[col] = e.evalValue(expr, tuple.turnToBytes())
-    }
-
-    return result
-}
-*/
 
 func (e *Executor) execCreateDB(stmt Statement){
 	e.syst.CreateDatabase(stmt.DBName)
