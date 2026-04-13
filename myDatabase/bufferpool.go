@@ -112,7 +112,7 @@ func (bf *BufferPool) FittingPage(filepath string, length uint16) (uint32, *Page
 			row := fsmPage.ReadRow(s)
 			var pageId uint32
 			var freeBytes uint16
-			binary.LittleEndian:.PutUint32(row[0:4], pageId)
+			binary.LittleEndian.PutUint32(row[0:4], pageId)
 			binary.LittleEndian.PutUint16(row[4:6], freeBytes)
 
 			if freeBytes >= length{
@@ -145,7 +145,7 @@ func (bf *BufferPool) FlushAll(){
 
 func (bf *BufferPool) AllocatePage(table *Table) *Page{
   pg := &Page{}
-	allocId := table.LastPageId++
+	allocId := table.LastPageId + 1
 	pg.Init(allocId)
 
 	return pg

@@ -1,9 +1,7 @@
-package system
+package myDatabase
 
 import(
 	"log"
-	"real_dbms/myDatabase"
-	"real_dbms/myDatabase/catalog"
 )
 
 const sysPath = "/home/nines/Desktop/gon/TestDB"

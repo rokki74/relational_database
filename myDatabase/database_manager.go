@@ -1,14 +1,11 @@
 package myDatabase
 
-import(
-	"os"
+import (
 	"log"
-	"real_dbms/myDatabase/system"
-	"real_dbms/myDatabase/catalog"
+	"os"
 )
 
-type DBSystem system.DBSystem
-type CatalogManager catalog.CatalogManager
+type system DBSystem
 
 type Database_Manager struct{
 	Dbname string

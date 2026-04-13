@@ -1,0 +1,10 @@
+# real_dbms/myDatabase
+myDatabase/bufferpool.go:115:23: syntax error: unexpected : at end of statement
+myDatabase/bufferpool.go:148:29: syntax error: unexpected ++ at end of statement
+myDatabase/catalog.go:76:4: syntax error: unexpected keyword chan at end of statement
+myDatabase/catalog.go:111:4: syntax error: unexpected keyword chan at end of statement
+myDatabase/catalog.go:173:4: syntax error: unexpected keyword chan at end of statement
+myDatabase/catalog.go:193:29: syntax error: unexpected += at end of statement
+myDatabase/catalog.go:261:45: syntax error: unexpected comma, expected type
+myDatabase/catalog.go:265:16: syntax error: cannot use tableMeta := tableMetas as value
+myDatabase/table.go:438:2: label buf defined and not used

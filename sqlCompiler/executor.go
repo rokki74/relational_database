@@ -3,7 +3,6 @@ package sqlCompiler
 import (
 	"log"
 	"real_dbms/myDatabase"
-	"real_dbms/myDatabase/system"
 	"strconv"
 	"strings"
 	"encoding/binary"
@@ -12,9 +11,10 @@ import (
 var TABLEResource uint8 = 0 
 var INDEXResource uint8 = 1
 
+type system myDatabase.DBSystem
 type Executor struct{
 	CurrentDB *myDatabase.Database_Manager
-	syst *system.DBSystem
+	syst *system
 }
 
 type TupData struct{

@@ -1,17 +1,16 @@
-package server
+package myDatabase
 
 import (
 	"bufio"
 	"fmt"
 	"net"
 	"strings"
-  "real_dbms/myDatabase/system"
 	"real_dbms/sqlCompiler"
 	"log"
 )
 
 type Server struct {
-	RealDB *system.DBSystem
+	RealDB *system
 }
 
 func NewServer() *Server {
