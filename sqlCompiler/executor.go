@@ -11,10 +11,10 @@ import (
 var TABLEResource uint8 = 0 
 var INDEXResource uint8 = 1
 
-type system myDatabase.DBSystem
+type.System myDatabase.DBSystem
 type Executor struct{
 	CurrentDB *myDatabase.Database_Manager
-	syst *system
+	Syst *myDatabase.DBSystem
 }
 
 type TupData struct{
@@ -73,7 +73,7 @@ func (e *Executor) Execute(stmt Statement) [][]string {
 }
 
 func (e *Executor) execUseStmt(stmt *UseStmt){
-	dbMngr, ok := e.syst.GetDatabase(stmt.DBName)
+	dbMngr, ok := e.Syst.GetDatabase(stmt.DBName)
 	if !ok{
 		log.Printf("Database unavailable for table deletion operation!")
 		return
@@ -649,7 +649,7 @@ func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 }
 
 func (e *Executor) execCreateDB(stmt Statement){
-	e.syst.CreateDatabase(stmt.DBName)
+	e.Syst.CreateDatabase(stmt.DBName)
 }
 
 func (e *Executor) execCreateTbl(stmt Statement){

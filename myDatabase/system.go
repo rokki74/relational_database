@@ -1,15 +1,14 @@
 package myDatabase
 
-import(
+import (
 	"log"
 )
 
 const sysPath = "/home/nines/Desktop/gon/TestDB"
 
 type DBSystem struct{
-	Catalog *catalog.CatalogManager
+	Catalog *CatalogManager
 	Pager Pager
-	Executor Executor
 	Sessions map[string]*Database_Manager
 }
 
@@ -19,7 +18,7 @@ func GetSystemPath() string{
 
 func InitSystem() *DBSystem{
 	log.Printf("SYSTEM STARTING..")
-	clgMngr ,_ := catalog.NewCatalog()
+	clgMngr ,_ := NewCatalog()
 	clgMngr.LoadCatalog()
 
 	log.Printf("Started successfully!")
@@ -29,13 +28,15 @@ func InitSystem() *DBSystem{
 }
 
 func (syst *DBSystem) GetDatabase(dbName string) (*Database_Manager, bool){
-	cata, ok := syst.Catalog.CatalogEntry[dbName]
+	_, ok := syst.Catalog.CatalogEntry[dbName]
 	if !ok{
+		log.Printf("Database does not exist!")
 		return nil, false
 	}
 
+	catalog := CatalogManager{}
 	dbMngr := &Database_Manager{}
-	dbMngr.Catalog = cata
+	dbMngr.Catalog = &catalog
 	dbMngr.Dbname = dbName
 	dbMngr.Pager = &syst.Pager
 	dbMngr.InitDB()

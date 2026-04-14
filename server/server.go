@@ -1,4 +1,4 @@
-package myDatabase
+package server
 
 import (
 	"bufio"
@@ -6,16 +6,17 @@ import (
 	"net"
 	"strings"
 	"real_dbms/sqlCompiler"
+	"real_dbms/myDatabase"
 	"log"
 )
 
 type Server struct {
-	RealDB *system
+	RealDB *myDatabase.DBSystem
 }
 
 func NewServer() *Server {
 	return &Server{
-		RealDB: system.InitSystem(),
+		RealDB: myDatabase.InitSystem(),
 	}
 }
 
@@ -77,21 +78,17 @@ func (s *Server) handleClient(conn net.Conn) {
 func (s *Server) executeSQL(sql string) ([][]string, error) {
 	lexer := sqlCompiler.NewLexer(sql)
 	parser := sqlCompiler.NewParser(lexer)
-	session := system.Session{}
-	parser.ParseUse(&session)
 
-  executor := sqlCompiler.Executor{session, &s.RealDB}
-	db, exists := executor.syst.GetDatabase(executor.session.CurrentDB)
-	if !exists{
-			log.Printf("Cannot execute database does not exist!")
+  executor := sqlCompiler.Executor{
+		Syst: s.RealDB,
 	}
 
 	stmt := parser.ParseStatement()
 	if stmt == nil {
-		return nil, fmt.Errorf("failed to parse SQL")
+		return nil, fmt.Errorf("failed to parse SQL, It might be empty: %v", stmt)
 	}
 
-	result := executor.Execute(stmt, db)
+	result := executor.Execute(stmt)
 
 	return result, nil
 }

@@ -365,8 +365,3 @@ func (ce *CatalogEntry)UpdateCatalogEntryWith(catEntry *CatalogEntry){
 	}
 }
 
-func (clg *CatalogManager) CatalogScout(){
-
-}
-
-

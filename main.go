@@ -1,9 +1,9 @@
 package main
 
 import(
-	"real_dbms/myDatabase"
+	"real_dbms/server"
 )
 func main() {
-	server := myDatabase.NewServer()
+	server := server.NewServer()
 	server.Start(":5432")
 }
