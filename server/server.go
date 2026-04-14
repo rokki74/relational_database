@@ -20,16 +20,24 @@ func NewServer() *Server {
 	}
 }
 
+func RunServerManager(){
+	server := NewServer()
+	server.Start(":5439")
+}
+
+var cnts int = 0
 func (s *Server) Start(port string) {
+	cnts++
+	log.Printf("called the %v", cnts)
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Printf("error from server trying to listen to port")
-		panic(err)
+		log.Fatalf("error from server trying to listen to port, %v", err)
 	}
 	defer ln.Close()
 
 	fmt.Println("DB Server running on port", port)
 
+	fmt.Println("Server up and running, Waiting for requests..")
 	for {
 		conn, err := ln.Accept()
 		if err != nil {

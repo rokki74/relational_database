@@ -19,6 +19,7 @@ func GetSystemPath() string{
 func InitSystem() *DBSystem{
 	log.Printf("SYSTEM STARTING..")
 	clgMngr ,_ := NewCatalog()
+	log.Printf("NewCatalog done!")
 	clgMngr.LoadCatalog()
 
 	log.Printf("Started successfully!")

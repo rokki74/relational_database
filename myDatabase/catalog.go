@@ -2,11 +2,10 @@ package myDatabase
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
-	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 /* My mental flow for this catalog logic, --helps me boostrap faster later when using:
@@ -19,7 +18,7 @@ import (
 
 /*THE MAIN TABLES IN SYS DATABASE
 sys_tables_meta.tbl
-sys_indexes_meta.tbl 
+sys_indexes_meta.tbl
 sys_databases_meta.tbl
 */
 const sys_tables_m = "sys_tables_meta.tbl"
@@ -61,17 +60,14 @@ type CatalogManager struct{
 
 func NewCatalog() (*CatalogManager, bool){
 	clgMngr := &CatalogManager{}
-	clgMngr.SysDBDir = GetSystemPath()+"/sys"
-	_, err := os.Create(clgMngr.SysDBDir)
+	clgMngr.SysDBDir = filepath.Join(GetSystemPath()+"/sys")
+	err := os.MkdirAll(clgMngr.SysDBDir, 0755)
   if err != nil{
-		log.Printf("system init may have failed, checking for catalog.., ERROR: %v",err)
-		if errors.Is(err, fs.ErrExist){
-			log.Printf("system issue alleviated, process flow continues")
-			return clgMngr, true
-		}
+		log.Printf("system init may have failed, ERROR: %v",err)
 		log.Fatal("System Failure, Shutting down")
 	}
 
+	log.Printf("The catalog init was successful, ..yet to load, have a look: %v", clgMngr)
   return clgMngr,true
 }
 
@@ -91,13 +87,18 @@ func (clg *CatalogManager) UpdateDatabaseCatalog(db *Database_Manager, catEntry 
 //Same with a call to fill the catalog entries
 func (clg *CatalogManager) LoadDatabaseCatalog(){
 	c := make(chan []Page)
-	fl := clg.SysDBDir +sys_databases_m
+	fl := filepath.Join(clg.SysDBDir, sys_databases_m)
 	tabl := &Table{}
-	tabl.TableName = "Databases" 
-	clg.ScanFile(fl, 8, c) 
-
+	tabl.TableName = "Databases"
+	log.Printf("ready to scan the sys_databases_m file")
+	goodStat := clg.ScanFile(fl, 8, c) 
+  if !goodStat{
+		return
+	}
 	totalPages := 0
+	log.Printf("Preparing to start ranging the chan")
 	for pages := range(c){
+		log.Printf("ranging the chan now")
 		for _,page := range pages{
 			  totalPages += 1
 				pg := page
@@ -110,8 +111,8 @@ func (clg *CatalogManager) LoadDatabaseCatalog(){
 					dbNameLen := int(row[offset])
 					offset +=1
 					dbName := string(row[offset:offset+dbNameLen])
-					DBTablesCataFile := dbName+"/_tables.tbl"
-					DBIndexesCataFile := dbName+"/_indexes.tbl"
+					DBTablesCataFile := filepath.Join(dbName,"/_tables.tbl")
+					DBIndexesCataFile := filepath.Join(dbName,"/_indexes.tbl")
 					
 					clgEntry := CatalogEntry{}
 					//load index and tables catalogs
@@ -133,7 +134,7 @@ func (clg *CatalogManager) LoadDatabaseCatalog(){
 
 func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *CatalogEntry){
 	c := make(chan []Page)
-	fl := clg.SysDBDir+sys_indexes_m
+	fl := filepath.Join(clg.SysDBDir, filepath.Join("/", sys_databases_m))
 	clg.ScanFile(fl, 8, c)
   tabl := &Table{}
 	tabl.TableName ="Indexes"
@@ -249,7 +250,7 @@ func (clg *CatalogManager) LoadTableMeta(dbTablesPath string, catalogEntry *Cata
 	catalogEntry.Tables = make(map[string]*Table, 0)
 	
 	c := make(chan []Page)
-	fl := clg.SysDBDir+sys_tables_m
+	fl := filepath.Join(clg.SysDBDir, filepath.Join("/",sys_tables_m))
 	clg.ScanFile(fl, 8, c)
 
   tabl := &Table{}
@@ -360,30 +361,48 @@ func (clg *CatalogManager) PurgeTable(){
 
 }
 
-func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []Page ){
+func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []Page )bool{
 	if ScanPages >10{
 		ScanPages =10
 	}
 
 	table_pages := make([]Page, ScanPages)
-	f, err := os.Open(fileName)
-	defer f.Close()
-	if err != nil{
-		log.Printf("Error reading catalog table, ", err)
-		return
+	f, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0666)
+	info, e := f.Stat()
+	if e != nil {
+			log.Printf("Could not retrieve file stats: %v", err)
 	}
+
+	if info.Size() == 0 {
+			log.Println("File is empty. Skipping read loop.")
+			return false
+	}
+
+	if err != nil{
+		log.Printf("Error reading catalog table, %v", err)
+		if err ==io.EOF{
+			log.Printf("didn't even hit the chan seems the file is so so new!")
+			return true
+		}
+	}
+
+	defer f.Close()
 	for {
 		pg := Page{}
 		n, err := f.Read(pg.data[:])
+		if n > 0 {
+        log.Printf("Bytes read: %v", n)
+        table_pages = append(table_pages, pg)
+    }
 		if err != nil{
 			log.Printf("Error occured reading file, %v", err)
 			if err ==io.EOF{
 				c <- table_pages
-				return
+				return true
 			}
+
+			log.Printf("Terminal error reading file %v", err)
 		}
-    log.Printf("Bytes read: %v", n)
-		table_pages = append(table_pages, pg)
 
 		if len(table_pages) >= int(ScanPages){
 			c <- table_pages
@@ -423,16 +442,16 @@ func (ce *CatalogEntry)UpdateCatalogEntryWith(catEntry *CatalogEntry){
 func FetchSysPage(clg *CatalogManager, bf *BufferPool, tableName string, pageId uint32) (*Page, bool){
    switch tableName{
 	   case "DATABASES":
-			 filepath := clg.SysDBDir+ sys_databases_m
-       return bf.FetchPage(pageId, filepath)
+			 flpath := clg.SysDBDir+ sys_databases_m
+       return bf.FetchPage(pageId, flpath)
 		 case "TABLES":
-       filepath := clg.SysDBDir+ sys_tables_m
+       flpath := clg.SysDBDir+ sys_tables_m
 
-       return bf.FetchPage(pageId, filepath)
+       return bf.FetchPage(pageId, flpath)
 		 case "INDEXES":
-			 filepath := clg.SysDBDir+ sys_indexes_m
+			 flpath := clg.SysDBDir+ sys_indexes_m
 
-       return bf.FetchPage(pageId, filepath)
+       return bf.FetchPage(pageId, flpath)
 		 default:
 			 log.Printf("The table provided is not of the sys directory")
 			 return &Page{}, false
@@ -442,14 +461,14 @@ func FetchSysPage(clg *CatalogManager, bf *BufferPool, tableName string, pageId 
 func SaveSysPage(clg *CatalogManager,bf *BufferPool, tableName string, page *Page){
 		switch tableName{
 	   case "DATABASES":
-			 filepath := clg.SysDBDir+ sys_databases_m
-			 bf.SavePage(filepath, *page)
+			 flpath := clg.SysDBDir+ sys_databases_m
+			 bf.SavePage(flpath, *page)
 		 case "TABLES":
-       filepath := clg.SysDBDir+ sys_tables_m
-			 bf.SavePage(filepath, *page)
+       flpath := clg.SysDBDir+ sys_tables_m
+			 bf.SavePage(flpath, *page)
 		 case "INDEXES":
-			 filepath := clg.SysDBDir+ sys_indexes_m
-			 bf.SavePage(filepath, *page)
+			 flpath := clg.SysDBDir+ sys_indexes_m
+			 bf.SavePage(flpath, *page)
 		 default:
 			 log.Printf("The table provided is not of the sys directory")
 	 }

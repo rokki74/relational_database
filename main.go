@@ -4,6 +4,5 @@ import(
 	"real_dbms/server"
 )
 func main() {
-	server := server.NewServer()
-	server.Start(":5432")
+	server.RunServerManager()
 }
