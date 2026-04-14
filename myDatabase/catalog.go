@@ -1,6 +1,10 @@
 package myDatabase
 
 import (
+	"encoding/binary"
+	"errors"
+	"io"
+	"io/fs"
 	"log"
 	"os"
 )
@@ -14,7 +18,7 @@ import (
 */
 
 var systemPath = GetSystemPath() 
-var cat_sys_database_file = systemPath +"/sys_database.tbl"
+var cat_sys_database_file = systemPath +"/sys_databases.tbl"
 var cat_tables_file = systemPath +"/sys_tables.tbl"
 
 const lenOffset = 1 
@@ -54,7 +58,7 @@ func NewCatalog() (*CatalogManager, bool){
 	_, err := os.Create(cat_sys_database_file)
   if err != nil{
 		log.Printf("system init may have failed, checking for catalog.., ERROR: %v",err)
-		if os.Exists(cat_sys_database_file){
+		if errors.Is(err, fs.ErrExist){
 			log.Printf("system issue alleviated, process flow continues")
 			return clgMngr, true
 		}
@@ -85,12 +89,9 @@ func (clg *CatalogManager) LoadDatabaseCatalog(){
 					row := pg.Read_row(s)
 
 					offset := 0
-					dbNameLen :=0
-					dbNameLen = int(row[offset])
+					dbNameLen := int(row[offset])
 					offset +=1
-					dbNmBs := make([]byte,0)
-					copy(dbNmBs, row[offset:offset+dbNameLen])
-					dbName := string(dbNmBs)	
+					dbName := string(row[offset:offset+dbNameLen])
 					DBTablesCataFile := dbName+"/_tables.tbl"
 					DBIndexesCataFile := dbName+"/_indexes.tbl"
 					
@@ -148,6 +149,36 @@ func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *Cat
 	}
 }
 
+func (clg CatalogManager) SaveTable(dbName string, table *Table){
+	dbEntry, ok := clg.CatalogEntry[dbName]
+	if !ok{
+		log.Printf("Can't save table into an uninitialised database in the catalog")
+		return
+	}
+
+	_, k := dbEntry.Tables[table.TableName]
+	if k{
+		log.Printf("Table already exists!")
+		return
+	} 
+
+	dbEntry.Tables[table.TableName] = table
+}
+
+func (clg CatalogManager) DeleteTable(dbName string, table *Table){
+	dbEntry, ok := clg.CatalogEntry[dbName]
+	if !ok{
+		log.Printf("Can't delete table into an uninitialised database in the catalog")
+		return
+	}
+
+	_, k := dbEntry.Tables[table.TableName]
+	if k{
+		delete(dbEntry.Tables, table.TableName)
+		return
+	} 
+}
+
 func (clg *CatalogManager) BuildIndexesIntoTable(tableName string, dbName string){
 	clgEntry := clg.CatalogEntry[dbName]
 
@@ -164,78 +195,78 @@ func (clg *CatalogManager) BuildIndexesIntoTable(tableName string, dbName string
 		index.ColumnPos = cata.ColumnPos
 		index.FileName = cata.IndexFile
 		index.Name = cata.IndexFile
-    index.MemTree = index.BuildMemTreeFromIndexFile()
-
-		table.Indexes = append(table.Indexes[], index)
+    index.BuildMemTreeFromIndexFile()
+		col := table.TableSchema.Columns[index.ColumnPos]
+		table.Indexes[col.ColumnName] = index
 	}
 }
 
 func (clg *CatalogManager) LoadTableMeta(dbTablesPath string, catalogEntry *CatalogEntry){
-	catalogEntry.Tables := make(map[string]*Table, 0)
+	catalogEntry.Tables = make(map[string]*Table, 0)
 	
-	c := make(chan *[]Page)
+	c := make(chan []Page)
 	clg.ScanFile(dbTablesPath, 8, c)
 
 	for pages := range c{
 		for _,page := range pages{
-			pg = page
+			pg := &page
 			header := pg.Read_header()
-			for r := 0; r<=header.rowCount;r++{
+			for s := 0; s<=int(header.RowCount);s++{
 				table := Table{}
+				rB := page.Read_row(s)
 				tableSchema := Schema{}
 				tableSchema.Columns = make([]Column,0)
 				
 				currOffset := 0
-				tableNameLen := uint8(r[currOffset:currOffset+lenOffset])
+				tableNameLen := uint8(rB[currOffset])
 				currOffset += lenOffset
-
-				tableName := string(r[currOffset:currOffset+tableNameLen])
-				currOffset += tableNameLen
-				lastPageId := uint32(r[currOffset:currOffset+lastPageIdLen])
-				currOffset += lastPageIdLen
-				firstFramePageId := uint32(r[currOffset:currOffset+lastPageIdLen])
-
+				tableName := string(rB[currOffset:currOffset+int(tableNameLen)])
+				currOffset += int(tableNameLen)
+				lastPageId := binary.LittleEndian.Uint32(rB[currOffset:currOffset+4])
+				currOffset += 4
+				firstFramePageId := binary.LittleEndian.Uint32(rB[currOffset:currOffset+4])
+        currOffset += 4 
 				//The next data bytes have two preceeding meta before them len and type both 1 bytes as the catalogs needed to track themselves here unlike my normal user tables 
 				//where columns or rather schema begins is an extra byte to inform how many cols there are
-				totalCols := uint8(r[currOffset:currOffset+1])
+				totalCols := uint8(rB[currOffset])
 				currOffset +=1
 
 				schema := Schema{}
 				schemaCols := make([]Column, 0)
-				for colNo := 1; colNo <= totalCols; colNo++{
-					colLen := uint8(r[currOffset:currOffset+lenOffset])
-					currOffset += lenOffset
-					colType := uint8(r[currOff:currOffset+typeOffset])
-					currOffset += typeOffset
+				for colNo := 1; colNo <= int(totalCols); colNo++{
+					colType := uint8(rB[currOffset])
+					currOffset += 1
+					colLen := uint8(rB[currOffset])
+					currOffset += 1
 					
 					switch colType{
 					case 1:
 						//haha i previously read it into an int then i was struggling to find the column name, realized it was like i was using two columnTypes separately yet it was meant the first offset to infer the column type already
-						colName := string(r[currOffset:currOffset+colLen])
-						currOffset += colLen
+						colName := string(rB[currOffset:currOffset+int(colLen)])
+						currOffset += int(colLen)
 
 						column := Column{
-							columnName : colName,
-							columnType : BOOLEAN,
+							ColumnName : colName,
+							ColumnType : BOOLEAN,
 							nullable : false,
 						}
 					
 						schemaCols = append(schemaCols, column)
 
 					case 2:
-						colName := string(r[currOffset:currOffset+colLen])
-						currOffset += colLen
+						colName := string(rB[currOffset:currOffset+int(colLen)])
+						currOffset += int(colLen)
 
 						column := Column{
-							columnName : colName,
-							columnType : INT,
+							ColumnName : colName,
+							ColumnType : INT,
 							nullable : false,
 						}
 						schemaCols = append(schemaCols, column)
 
 					case 3:
-						colName := string(r[currOffset:currOffset+colLen])
-						currOffset += colLen
+						colName := string(rB[currOffset:currOffset+int(colLen)])
+						currOffset += int(colLen)
 
 						column := Column{
 							ColumnName: colName,
@@ -251,37 +282,25 @@ func (clg *CatalogManager) LoadTableMeta(dbTablesPath string, catalogEntry *Cata
 				table = Table{
 					TableName: tableName,
 					LastPageId: lastPageId,
-					FirstFramePageID: firstFramePageId,
+					FirstFramePageId: firstFramePageId,
 					TableSchema: schema,
 				}
-
+        catalogEntry.Tables[tableName]=&table
 			}
 		}
   }
 }
 
 func (clg *CatalogManager) LoadCatalog(){
-	clg.CatalogEntry.Tables := make(map[string]*Table, 0)
-	clg.CatalogEntry.IndexMetas := clg.LoadIndexMeta()
-
-	tableMetas := clg.LoadTableMeta()
-	for _,tableMeta := range tableMetas{
-		table := Table{
-			TableName : tableMeta.TableName,
-			LastPageId: tableMeta.LastPageId,
-			FirstFramePageID: tableMeta.LastFramePageId,
-			TableSchema: tableMeta.TableSchema,
-		}
-
-		clg.CatalogEntry.Tables[tableMeta.TableName] = &table
-	}
+	clg.CatalogEntry = make(map[string]CatalogEntry, 0)
+  clg.LoadDatabaseCatalog()	
 }
 
 func (clg *CatalogManager) PurgeTable(){
 
 }
 
-func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []Page ) bool{
+func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []Page ){
 	if ScanPages >10{
 		ScanPages =10
 	}
@@ -291,26 +310,25 @@ func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []P
 	defer f.Close()
 	if err != nil{
 		log.Printf("Error reading catalog table, ", err)
-		return false
+		return
 	}
 	for {
 		pg := Page{}
-		pg.data := make([]byte, 4096) 
-		n, err := f.Read(pg.data)
+		n, err := f.Read(pg.data[:])
 		if err != nil{
 			log.Printf("Error occured reading file, %v", err)
 			if err ==io.EOF{
-				c <- &table_pages
+				c <- table_pages
 				return
 			}
 		}
-
+    log.Printf("Bytes read: %v", n)
 		table_pages = append(table_pages, pg)
 
 		if len(table_pages) >= int(ScanPages){
-			c <- &table_pages
+			c <- table_pages
 
-			table_pages = make([]Page, 0, scanLimit)
+			table_pages = make([]Page, 0, ScanPages)
 		}
 	}
 }

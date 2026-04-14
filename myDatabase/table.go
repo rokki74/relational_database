@@ -67,10 +67,8 @@ func (db *Database_Manager) createTable(name string, columns []Column) (Table, b
 			 LastPageId: 0,
 	   }
 
-	clgEntry.Tables[name] = table
-	if db.SaveTable(&table){
-		return table, true
-	}
+	clgEntry.Tables[name] = &table
+	db.SaveTable(&table)
 
 	return Table{}, false
 }
@@ -83,25 +81,21 @@ func (db *Database_Manager) GetTable(name string) (Table, bool){
 		return Table{}, false
 	}
 
-  return clgEntry.Tables[name]
-}
-
-func (db *Database_Manager) SaveTable(table *Table) bool{
-	return db.Catalog.SaveTable(table)
+  return *clgEntry.Tables[name], true
 }
 
 //After a scan get the pageId's that are free and by how many bytes then parse to this function to write to the fsm 
 func (tb *Table) writeFsm(pageId uint32, freeBytes uint16){
-  fsmData := FSMData{}
+  fsmData := tb.Db.BufferPool.FSMData{}
 	fsmData.TblPages[pageId] = freeBytes
 
-	tb.Db.FsmManager.Data.Tbls[tb.TableName] = fsmData
+	tb.Db.BufferPool.Fsm.Data.Tbls[tb.TableName] = fsmData
   
 	fsmPath, exists := tb.Db.GetFsmPath(tb.TableName)
 	if !exists{
 	   return
 	}
-	page, ok := tb.Db.Bufferpool.FetchPage(tb.Db.FsmManager.LastFsmPageId, fsmPath)
+	page, ok := tb.Db.BufferPool.FetchPage(tb.Db.BufferPool.Fsm.LastFsmPageId, fsmPath)
 	if !ok{
 	 return
 	}
@@ -116,8 +110,12 @@ func (tb *Table) writeFsm(pageId uint32, freeBytes uint16){
 	tb.Db.BufferPool.SavePage(fsmPath, *page)
 }
 
-func (db *Database_Manager) deleteTable(table *Table){
-	db.Catalog.DeleteTable(table)
+func (tb *Table)  SaveTable(){
+	tb.Db.Catalog.SaveTable(tb.Db.Dbname, tb)
+}
+
+func (tb *Table) DeleteTable(){
+	tb.Db.Catalog.DeleteTable(tb.Db.Dbname, tb)
 }
 
 func (tl *Table) read(pageId uint32) ([]byte, bool){
@@ -130,7 +128,7 @@ func (tl *Table) read(pageId uint32) ([]byte, bool){
 	header := pg.Read_header()
 	for i :=0; i<int(header.RowCount); i++{
 		row := pg.Read_row(i)
-		rows = append(rows, row)
+		rows = append(rows, row...)
 	}
 
 	return rows, true
@@ -239,13 +237,20 @@ func (tl *Table) DeserializeColumnValues(rowBytes []byte) string{
 }
 
 func (tb *Table) Insert(row string) {
-	 row_bytes := tb.SerializeColumns(row)
-   ok, pageId := tb.bufferpool.FittingPage(tb.tableId, len(row_bytes))
+	 parts := strings.Split(row, ",")
+	 colTypes := make([]ColumnType, 0)
+	 for pos, _ := range parts{
+		 col := tb.TableSchema.Columns[pos]
+		 colTypes = append(colTypes, col.ColumnType)
+	 }
+	 row_bytes := tb.SerializeColumnValues(parts, colTypes)
+   pageId, _, ok := tb.Db.BufferPool.FittingPage(tb, uint16(len(row_bytes))
 	 if !ok{
 		 pageId = tb.LastPageId
 	 }
-
-	 page := tb.BufferPool.FetchPage(pageId)
+   tablepath, _ := tb.Db.GetTablePath(tb.TableName)
+	 page, _ := tb.Db.BufferPool.FetchPage(pageId, tablepath)
+	
 	 rec := &WalRecord{
 		 TableName: tb.TableName,
 		 PageId: page.PageId,
@@ -355,9 +360,14 @@ func (tb *Table) CreateIndex(name string, columnNames []string) {
   }
 }
 
-func (tb *Table) MakeIndexes(){
+func (db *Database_Manager) MakeIndexes(tb *Table){
+	tablePath, ok := db.GetTablePath(tb.TableName)
+	if !ok{
+		log.Printf("Cannot make indexes for a non existent table!")
+		return
+	}
 	for _, index := range(tb.Indexes){
-		tb.MakeIndexMemTreeFromTableFile(index)
+		tb.MakeIndexMemTreeFromTableFile(index, tablePath)
 	}
 }
 
@@ -393,7 +403,7 @@ func (tb *Table) MakeIndexMemTreeFromTableFile(idx *Index, tablePath string) {
     }
 }
 
-func (t *Table) FindByIndex(column string, key []byte) *Row {
+func (db *Database_Manager) FindByIndex(column string, key []byte, t *Table) []byte {
 
 	idx := t.Indexes[column]
 
@@ -402,10 +412,11 @@ func (t *Table) FindByIndex(column string, key []byte) *Row {
 	if ptr == nil {
 		return nil
 	}
+  
+	tablePath, _ := db.GetTablePath(t.TableName)
+	page, _ := db.BufferPool.FetchPage(ptr.PageId, tablePath)
 
-	page := t.BufferPool.FetchPage(ptr.PageId, idx.MemTree.TreePath)
-
-	return page.Read_row(ptr.SlotId)
+	return page.Read_row(int(ptr.SlotId))
 }
 
 //Index key extraction logic
@@ -415,8 +426,8 @@ func EncodeKey(value interface{}, t ColumnType) []byte {
         return encodeInt(value.(int32))
     case STRING:
         return encodeString(value.(string))
-    case TIMESTAMP:
-        return encodeInt64(value.(int64))
+		default:
+			 return encodeInt64(value.(int64))
     }
 }
 
@@ -435,9 +446,12 @@ func encodeInt(v int32) []byte {
 }
 
 func encodeInt64(v int64) []byte{
-	buf :make([]byte, 8)
+	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(v))
 	return buf
 }
 
-
+func (tb *Table) Compact_Pages(){
+   tempPage := Page{}
+   pg.Compact_slots(&tempPage)
+}

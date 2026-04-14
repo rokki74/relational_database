@@ -54,7 +54,7 @@ func (fsm *FSMManager)UpdateFSM(fsmPage *Page, tablePgId uint32, writtenLen uint
 				freeBytes :=binary.LittleEndian.Uint16(row[4:6])
 
         
-				fsmPage.DeleteRow(s)
+				fsmPage.Delete_row(s)
 				freeBytes += writtenLen
 				binary.LittleEndian.PutUint32(row[0:4], pageId)
 				binary.LittleEndian.PutUint16(row[4:6], freeBytes)

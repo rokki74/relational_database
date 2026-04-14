@@ -100,16 +100,22 @@ func (bf *BufferPool) MarkDirty(fileName string, pageId uint32){
 	datum.Dirty = true
 }
 
-func (bf *BufferPool) FittingPage(filepath string, length uint16) (uint32, *Page, bool){
-	for pId :=uint32(0); pId<= bf.fsm.LastFsmPageId; pId++{
-		fsmPage, prsnt := bf.FetchPage(pId, filepath)
+func (bf *BufferPool) FittingPage(tb *Table, length uint16) (uint32, *Page, bool){
+	fsmPath, _ := tb.Db.GetFsmPath(tb.TableName)
+	lastFramePageId,ok := bf.Fsm.TablesRecorded[tb.TableName]
+	if !ok{
+		log.Printf("The fsm records not found for the table %v",tb.TableName)
+		return 0, nil, false
+	}
+	for pId :=uint32(0); pId<= lastFramePageId; pId++{
+		fsmPage, prsnt := bf.FetchPage(pId, fsmPath)
 		if !prsnt{
 			continue
 		}
 
 		header := fsmPage.Read_header()
 		for s:=0; s<=int(header.RowCount); s++{
-			row := fsmPage.ReadRow(s)
+			row := fsmPage.Read_row(s)
 			var pageId uint32
 			var freeBytes uint16
 			binary.LittleEndian.PutUint32(row[0:4], pageId)

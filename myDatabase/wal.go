@@ -95,7 +95,7 @@ func deserializeRecord(recBytes []byte) *WalRecord{
 	offset += 8
 	var resType [1]byte
 	copy(resType[:], recBytes[offset:offset+1])
-	rec.ResourceType = uint8(resType[:])
+	rec.ResourceType = ResourceType(resType[offset])
 	offset += 1
 	var tableNameLen [1]byte
 	copy(tableNameLen[:], recBytes[offset:offset+1])
@@ -109,8 +109,8 @@ func deserializeRecord(recBytes []byte) *WalRecord{
 	copy(bufByte[:],	recBytes[offset:offset+1])
 	rec.Operation = uint8(bufByte[0])
 	offset += 1
-	binary.LittleEndian.PutUint32(recBytes[offset:offset+4] , rec.DataSize)
-	offset += 4
+	binary.LittleEndian.PutUint16(recBytes[offset:offset+2] , rec.DataSize)
+	offset += 2
 	copy(rec.Data, recBytes[offset:offset+int(rec.DataSize)])
 
 	return &rec
@@ -339,7 +339,7 @@ func (wal *WalManager) Undo(log WalRecord, db *Database_Manager){
 		if !exists{
 		  return
 		}
-		page.DeleteRow(s)
+		page.Delete_row(s)
 }
 
 func (wal *WalManager) LogDelete(tableName string, resType ResourceType, rowId RowId, deletedBytes []byte){

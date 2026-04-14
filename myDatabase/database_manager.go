@@ -3,6 +3,8 @@ package myDatabase
 import (
 	"log"
 	"os"
+	"io/fs"
+	"bytes"
 )
 
 type system DBSystem
@@ -19,7 +21,7 @@ type Database_Manager struct{
 
 func (syst *DBSystem) CreateDatabase(name string) bool{
  //i cannot ascertain as of now whether the ModeDir is really used corectly to create dir
- err := os.Mkdir(system.GetSystemPath()+"/"+name, fs.ModeDir)
+ err := os.Mkdir(GetSystemPath()+"/"+name, fs.ModeDir)
  if err !=nil{
 	 log.Printf("Could not build the database dir! %",err)
 	 return false
@@ -30,13 +32,13 @@ func (syst *DBSystem) CreateDatabase(name string) bool{
 }
 
 func (db *Database_Manager) InitDB(){
-	db.WAL = NewWalManager(system.GetSystemPath()+"/"+db.Dbname)
-	db.DbPath = system.GetSystemPath()+"/"+db.Dbname
+	db.WAL = NewWalManager(GetSystemPath()+"/"+db.Dbname)
+	db.DbPath = GetSystemPath()+"/"+db.Dbname
 
 	db.BufferPool = &BufferPool{
 		Pager: db.Pager,
 		capacity: 0,
-		fsm: NewFsmManager(),
+		Fsm: NewFsmManager(),
 	}
 
 	db.NewTransactionManager()
@@ -82,6 +84,10 @@ func (db *Database_Manager) GetFsmPath(tableName string) (string, bool){
   return db.DbPath+"/"+tableName+".fsm", true
 }
 
+func (db Database_Manager) SaveTable(table *Table){
+	db.Catalog.SaveTable(db.Dbname, table)
+}
+
 func (db *Database_Manager) GetIndexPath(tableName string) (string, bool){
   _, exists := db.GetTable(tableName)
 	if !exists{
@@ -110,18 +116,14 @@ func (db *Database_Manager) NewTransactionManager(){
 
 func (db *Database_Manager) FillFSM(){
   tableNames := make([]string, 0)
-	for k, v := range db.Catalog.CatalogEntry[db.Dbname].Tables{
+	for k, _ := range db.Catalog.CatalogEntry[db.Dbname].Tables{
 	   tableNames = append(tableNames, k)
 	}
-  db.FsmManager.FillFsms(db, tableNames)
+  db.BufferPool.Fsm.FillFsms(db, tableNames)
 }
 
 func extractKey(row []byte, colPos uint8, colType ColumnType) []byte {
 	offset := 0
-
-	// ⚠️ This depends on your row layout
-	// You likely need a schema-aware offset calculation
-
 	switch colType {
 	case INT:
 		return row[offset : offset+4]
@@ -197,10 +199,8 @@ func (db *Database_Manager) UpdateIndexes(
 			continue
 		}
 
-		// 🔴 DELETE old entry
 		tree.Delete(oldKey, rowId)
 
-		// 🟢 INSERT new entry
 		tree.Insert(newKey, rowId)
 	}
 }

@@ -8,9 +8,9 @@ const sysPath = "/home/nines/Desktop/gon/TestDB"
 
 type DBSystem struct{
 	Catalog *catalog.CatalogManager
-	Pager myDatabase.Pager
-	Executor myDatabase.Executor
-	Sessions map[string]*myDatabase.Database_Manager
+	Pager Pager
+	Executor Executor
+	Sessions map[string]*Database_Manager
 }
 
 func GetSystemPath() string{
@@ -28,13 +28,13 @@ func InitSystem() *DBSystem{
 	}
 }
 
-func (syst *DBSystem) GetDatabase(dbName string) (*myDatabase.Database_Manager, bool){
+func (syst *DBSystem) GetDatabase(dbName string) (*Database_Manager, bool){
 	cata, ok := syst.Catalog.CatalogEntry[dbName]
 	if !ok{
 		return nil, false
 	}
 
-	dbMngr := &myDatabase.Database_Manager{}
+	dbMngr := &Database_Manager{}
 	dbMngr.Catalog = cata
 	dbMngr.Dbname = dbName
 	dbMngr.Pager = &syst.Pager
@@ -44,19 +44,19 @@ func (syst *DBSystem) GetDatabase(dbName string) (*myDatabase.Database_Manager, 
 	return dbMngr, true
 }
 
-func (syst *DBSystem) NewSession(db *myDatabase.Database_Manager){
+func (syst *DBSystem) NewSession(db *Database_Manager){
   if syst.InSession(db){
 	  return
 	}
   syst.Sessions[db.Dbname] = db
 }
 
-func (syst *DBSystem) InSession(db *myDatabase.Database_Manager) bool{
+func (syst *DBSystem) InSession(db *Database_Manager) bool{
   _, in := syst.Sessions[db.Dbname]
 	return in
 }
 
-func (syst *DBSystem) EndSession(db *myDatabase.Database_Manager){
+func (syst *DBSystem) EndSession(db *Database_Manager){
   delete(syst.Sessions, db.Dbname)
 }
 

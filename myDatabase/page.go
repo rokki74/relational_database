@@ -1,9 +1,10 @@
 package myDatabase
 
 import (
+	"bytes"
 	"encoding/binary"
-	"math/bits"
 	"log"
+	"math/bits"
 )
 
 const PAGE_SIZE = 4096
@@ -174,7 +175,7 @@ func (page *Page) WalkPage(target []byte) (int, bool){
 			}
       
 			data := page.Read_row(s)
-			if data == target{
+			if bytes.Equal(data, target){
 			  return s, true
 			}
 	 }
@@ -189,11 +190,11 @@ func (page *Page) Read_row(slot_index int) []byte{
 }
 
 func (pg *Page) Delete_row(slot_index int) {
-	pg.killSlotIndex(slot_index)
+	pg.KillSlotIndex(slot_index)
 	pg.setFlag(PAGE_FLAG_LOOSE)
 }
 
-func (pg *Page) Compact_slot(tempPage *Page){
+func (pg *Page) Compact_slots(tempPage *Page){
 	header := pg.Read_header()
 	log.Printf("Compacting slots of %v", header.PageId)
 
