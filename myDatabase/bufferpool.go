@@ -107,7 +107,9 @@ func (bf *BufferPool) FittingPage(tb *Table, length uint16) (uint32, *Page, bool
 		log.Printf("The fsm records not found for the table %v",tb.TableName)
 		return 0, nil, false
 	}
-	for pId :=uint32(0); pId<= lastFramePageId; pId++{
+
+	//Just remembered i need to scan from the last fsm page as it shall be the freshest then
+	for pId :=lastFramePageId; pId>=0; pId--{
 		fsmPage, prsnt := bf.FetchPage(pId, fsmPath)
 		if !prsnt{
 			continue

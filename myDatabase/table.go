@@ -49,7 +49,7 @@ type Table struct {
 		Db *Database_Manager
 }
 
-func (db *Database_Manager) createTable(name string, columns []Column) (Table, bool){
+func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, bool){
   clgEntry := db.Catalog.CatalogEntry[db.Dbname]
 	_, exists := clgEntry.Tables[name]
 	if !exists{
@@ -86,24 +86,27 @@ func (db *Database_Manager) GetTable(name string) (Table, bool){
 
 //After a scan get the pageId's that are free and by how many bytes then parse to this function to write to the fsm 
 func (tb *Table) writeFsm(pageId uint32, freeBytes uint16){
-  fsmData := tb.Db.BufferPool.FSMData{}
-	fsmData.TblPages[pageId] = freeBytes
+	//The tail is always the latest information thus needs to be in such a way that i scan from the last fsm to find page with free page then, yeah
+	lastFsmPageId, ok := tb.Db.BufferPool.Fsm.TablesRecorded[tb.TableName]
+	if !ok{
+		tb.Db.BufferPool.Fsm.TablesRecorded[tb.TableName] = tb.FirstFramePageId
+		lastFsmPageId = tb.FirstFramePageId
+	}
 
-	tb.Db.BufferPool.Fsm.Data.Tbls[tb.TableName] = fsmData
-  
 	fsmPath, exists := tb.Db.GetFsmPath(tb.TableName)
 	if !exists{
 	   return
 	}
-	page, ok := tb.Db.BufferPool.FetchPage(tb.Db.BufferPool.Fsm.LastFsmPageId, fsmPath)
+
+	page, ok := tb.Db.BufferPool.FetchPage(lastFsmPageId, fsmPath)
 	if !ok{
 	 return
 	}
 	header := page.Read_header()
 
-	binary.LittleEndian.PutUint32(page[header.FreeSpaceOffset:header.FreeSpaceOffset+4], uint32(pageId))
+	binary.LittleEndian.PutUint32(page.data[header.FreeSpaceOffset:header.FreeSpaceOffset+4], uint32(pageId))
   header.FreeSpaceOffset += 4
-	binary.LittleEndian.PutUint16(page[header.FreeSpaceOffset:header.FreeSpaceOffset+2], uint16(freeBytes))
+	binary.LittleEndian.PutUint16(page.data[header.FreeSpaceOffset:header.FreeSpaceOffset+2], uint16(freeBytes))
 	header.FreeSpaceOffset += 2
 	page.Write_header(&header)
 
@@ -236,54 +239,52 @@ func (tl *Table) DeserializeColumnValues(rowBytes []byte) string{
 	return rowString
 }
 
-func (tb *Table) Insert(row string) {
+func (tb *Table) Insert(row string, txn *Transaction) {
 	 parts := strings.Split(row, ",")
 	 colTypes := make([]ColumnType, 0)
 	 for pos, _ := range parts{
 		 col := tb.TableSchema.Columns[pos]
 		 colTypes = append(colTypes, col.ColumnType)
 	 }
+
 	 row_bytes := tb.SerializeColumnValues(parts, colTypes)
-   pageId, _, ok := tb.Db.BufferPool.FittingPage(tb, uint16(len(row_bytes))
+   pageId, _, ok := tb.Db.BufferPool.FittingPage(tb, uint16(len(row_bytes)))
 	 if !ok{
 		 pageId = tb.LastPageId
 	 }
    tablepath, _ := tb.Db.GetTablePath(tb.TableName)
 	 page, _ := tb.Db.BufferPool.FetchPage(pageId, tablepath)
-	
-	 rec := &WalRecord{
-		 TableName: tb.TableName,
-		 PageId: page.PageId,
-		 DataSize: len(row_bytes),
-		 Data: row_bytes,
-	 }
+   header := page.Read_header()	
 
-	 lsn := t.txnMngr.wal.LogInsert(&rec)
+	 rowId := RowId{pageId, uint16(header.RowCount)}
+	 lsn := tb.Db.WAL.LogInsert(tb.TableName, ResourceType(TABLETYPE), rowId, row_bytes)
 	 //the normal transaction flow can resume after wal being prioritized
-	 page.PageLSN = lsn
-	 pageId, SlotId := page.insert_row(row_bytes)
-	 tb.bufferpool.MarkDirty(tb.TableName, page.PageID)
-
-	 ptr := &RowId{pageId, SlotId}
+	 header.PageLSN = lsn
+	 ptr, _ := page.Insert_row(row_bytes)
+	 tb.bufferpool.MarkDirty(tb.TableName, header.PageId)
 
 
-  if tb.Indexed{
-		for col, idx := range t.Indexes.indexes {
+	 if len(tb.Indexes)>0{
+		for _, idx := range tb.Indexes {
 
-			key := tb.extractColumnValue(row, col)
+			key := tb.extractColumnValue(row, idx.ColumnPos)
 
-			idx.MemTree.Insert(key, ptr)
+			colType := colTypes[idx.ColumnPos]
+			ky := EncodeKey(key, colType)
+			idx.MemTree.Insert(ky, *ptr)
 		}
+		//After struggling here for the last 6 minutes it's finally figured out, the way one can loose context in his or her own project once it starts to grow, thanks example here i was missing the encoding the key function and was almost starting to handle it from scratch again
 	}
 
 	tb.TxnMngr.Commit(txn)
 }
+//All bugs in table.go are resolved i am hoping so, let's save 
 
 func (tb *Table) extractColumnValue(row string, colPos uint8) interface{} {
 
     parts := strings.Split(row, SEPARATOR)
 
-    colType, _, _ := tb.findColumnTypeAndNameFromPos(int(colPos))
+    colType, _, _ := tb.FindColumnTypeAndNameFromPos(int(colPos))
     value := parts[colPos]
 
     switch colType {
@@ -314,7 +315,7 @@ func (tb *Table) FindColumnTypeAndPos(col string) (ColumnType, uint8, bool){
 	return -1, uint8(0), false
 }
 
-func (tb *Table) findColumnTypeAndNameFromPos(pos int) (ColumnType, string, bool){
+func (tb *Table) FindColumnTypeAndNameFromPos(pos int) (ColumnType, string, bool){
 	columns := tb.TableSchema.Columns
 	if pos > len(columns){
 		return -1, "", false
@@ -451,7 +452,5 @@ func encodeInt64(v int64) []byte{
 	return buf
 }
 
-func (tb *Table) Compact_Pages(){
-   tempPage := Page{}
-   pg.Compact_slots(&tempPage)
-}
+//later i shall finish the compaction of tables/pages/slots
+

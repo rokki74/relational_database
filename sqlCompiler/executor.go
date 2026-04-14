@@ -11,7 +11,6 @@ import (
 var TABLEResource uint8 = 0 
 var INDEXResource uint8 = 1
 
-type.System myDatabase.DBSystem
 type Executor struct{
 	CurrentDB *myDatabase.Database_Manager
 	Syst *myDatabase.DBSystem
@@ -168,7 +167,7 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
     // 3. Find page with space (FSM)
 		tblPath, _ := db.GetTablePath(table.TableName)
 		fsmPath, _ := db.GetObjectPath(table.TableName, myDatabase.FSMTYPE)
-    pageID, fsmPage, availed := db.BufferPool.FittingPage(fsmPath, uint16(len(tupleBytes)))
+    pageID, fsmPage, availed := db.BufferPool.FittingPage(&table, uint16(len(tupleBytes)))
 		if availed{
 				page, got := db.BufferPool.FetchPage(pageID, tblPath)
 				if got{
@@ -450,7 +449,7 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 
                 // insert new tuple
 								var freePage myDatabase.Page
-								pgId, fsmPage, fitting := db.BufferPool.FittingPage(tablePath, uint16(len(newTupleBytes)))
+								pgId, fsmPage, fitting := db.BufferPool.FittingPage(&table, uint16(len(newTupleBytes)))
 								if fitting{
 									fPage, exists := db.BufferPool.FetchPage(pgId, tablePath)
 									if !exists{
@@ -648,20 +647,20 @@ func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 	return newTuple
 }
 
-func (e *Executor) execCreateDB(stmt Statement){
+func (e *Executor) execCreateDB(stmt *CreateDBStmt){
 	e.Syst.CreateDatabase(stmt.DBName)
 }
 
-func (e *Executor) execCreateTbl(stmt Statement){
+func (e *Executor) execCreateTbl(stmt *CreateTBLStmt){
   if e.CurrentDB ==nil{
 			log.Printf("Database is not set, cannot execute unnamed database for the statement")
 			return
 		}
   dbMngr := e.CurrentDB
-  dbMngr.CreateTable(stmt.TBLName)
+  dbMngr.CreateTable(stmt.TBLName, stmt.Columns)
 }
 
-func (e *Executor) execCreateIDX(stmt Statement){
+func (e *Executor) execCreateIDX(stmt *CreateIDXStmt){
   if e.CurrentDB == nil{
 			log.Printf("Database is not set, cannot execute unnamed database for the statement")
 			return

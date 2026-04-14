@@ -17,9 +17,14 @@ import (
 	   clgMngr.AddDatabaseCatalog(dbName)
 */
 
-var systemPath = GetSystemPath() 
-var cat_sys_database_file = systemPath +"/sys_databases.tbl"
-var cat_tables_file = systemPath +"/sys_tables.tbl"
+/*THE MAIN TABLES IN SYS DATABASE
+sys_tables_meta.tbl
+sys_indexes_meta.tbl 
+sys_databases_meta.tbl
+*/
+const sys_tables_m = "sys_tables_meta.tbl"
+const sys_indexes_m = "sys_indexes_meta.tbl"
+const sys_databases_m = "sys_databases_meta.tbl"
 
 const lenOffset = 1 
 const typeOffset = 1
@@ -51,11 +56,13 @@ type CatalogEntry struct{
 //clg manager here hasn't built the indexes instead using small meta, --this shall be a reminder for me later
 type CatalogManager struct{
 	CatalogEntry map[string]CatalogEntry
+	SysDBDir string
 }
 
 func NewCatalog() (*CatalogManager, bool){
 	clgMngr := &CatalogManager{}
-	_, err := os.Create(cat_sys_database_file)
+	clgMngr.SysDBDir = GetSystemPath()+"/sys"
+	_, err := os.Create(clgMngr.SysDBDir)
   if err != nil{
 		log.Printf("system init may have failed, checking for catalog.., ERROR: %v",err)
 		if errors.Is(err, fs.ErrExist){
@@ -84,10 +91,15 @@ func (clg *CatalogManager) UpdateDatabaseCatalog(db *Database_Manager, catEntry 
 //Same with a call to fill the catalog entries
 func (clg *CatalogManager) LoadDatabaseCatalog(){
 	c := make(chan []Page)
-	clg.ScanFile(cat_tables_file, 8, c) 
+	fl := clg.SysDBDir +sys_databases_m
+	tabl := &Table{}
+	tabl.TableName = "Databases" 
+	clg.ScanFile(fl, 8, c) 
 
+	totalPages := 0
 	for pages := range(c){
 		for _,page := range pages{
+			  totalPages += 1
 				pg := page
 
 				header := pg.Read_header()
@@ -108,17 +120,26 @@ func (clg *CatalogManager) LoadDatabaseCatalog(){
 
 					//so the tables and indexes cata are well aligned the only issue would be the database, what if this db has more than one row or overflows into next page etc? I still think such a case is very difficult as every row just stored one string the database name in the sys_database_file file. I will need to confirm later
 					clg.CatalogEntry[dbName] = clgEntry
+					tabl.LastPageId = uint32(totalPages - 1)
+
 				}
 			}
    }
-	//return clg
+	//The catalog is storing info about itself also and an in-mem so it can later utilise bufferpool
+	sysCatEntry := CatalogEntry{}
+	sysCatEntry.Tables[tabl.TableName] = tabl
+	clg.CatalogEntry["sys"] = sysCatEntry
 }
 
 func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *CatalogEntry){
 	c := make(chan []Page)
-	clg.ScanFile(dbIndexesPath, 8, c)
-	
+	fl := clg.SysDBDir+sys_indexes_m
+	clg.ScanFile(fl, 8, c)
+  tabl := &Table{}
+	tabl.TableName ="Indexes"
+
 	catalogEntry.IndexMetas = make(map[IndexFrame]IndexCata)
+	totalPages := 0
 	for pages := range c{
 		for _, page := range pages{
       pg := &page
@@ -151,8 +172,25 @@ func (clg *CatalogManager) LoadIndexMeta(dbIndexesPath string, catalogEntry *Cat
 				indexFrame := IndexFrame{indexedTable, indexName}
 				catalogEntry.IndexMetas[indexFrame] = indexCata
 			}
+
+			totalPages += 1
+			tabl.LastPageId = uint32(totalPages - 1)
 		}
 	}
+
+	existent, ok := clg.CatalogEntry["sys"]
+	if !ok{
+		existent.Tables[tabl.TableName] = tabl
+		clg.CatalogEntry["sys"] = existent
+
+		return
+	}
+
+	existent.Tables[tabl.TableName] = tabl
+}
+
+func PersistDB(){
+
 }
 
 func (clg CatalogManager) SaveTable(dbName string, table *Table){
@@ -211,8 +249,12 @@ func (clg *CatalogManager) LoadTableMeta(dbTablesPath string, catalogEntry *Cata
 	catalogEntry.Tables = make(map[string]*Table, 0)
 	
 	c := make(chan []Page)
-	clg.ScanFile(dbTablesPath, 8, c)
+	fl := clg.SysDBDir+sys_tables_m
+	clg.ScanFile(fl, 8, c)
 
+  tabl := &Table{}
+	tabl.TableName ="Tables"
+	totalPages := 0
 	for pages := range c{
 		for _,page := range pages{
 			pg := &page
@@ -293,8 +335,20 @@ func (clg *CatalogManager) LoadTableMeta(dbTablesPath string, catalogEntry *Cata
 				}
         catalogEntry.Tables[tableName]=&table
 			}
+
+			totalPages += 1
+			tabl.LastPageId = uint32(totalPages - 1)
 		}
   }
+
+	existent, ok := clg.CatalogEntry["sys"]
+	if !ok{
+    existent.Tables[tabl.TableName] = tabl
+		clg.CatalogEntry["sys"] = existent
+		return
+	}
+
+	existent.Tables[tabl.TableName] = tabl
 }
 
 func (clg *CatalogManager) LoadCatalog(){
@@ -363,5 +417,41 @@ func (ce *CatalogEntry)UpdateCatalogEntryWith(catEntry *CatalogEntry){
 
 		 ce.Tables[updatek] = updatev
 	}
+}
+
+
+func FetchSysPage(clg *CatalogManager, bf *BufferPool, tableName string, pageId uint32) (*Page, bool){
+   switch tableName{
+	   case "DATABASES":
+			 filepath := clg.SysDBDir+ sys_databases_m
+       return bf.FetchPage(pageId, filepath)
+		 case "TABLES":
+       filepath := clg.SysDBDir+ sys_tables_m
+
+       return bf.FetchPage(pageId, filepath)
+		 case "INDEXES":
+			 filepath := clg.SysDBDir+ sys_indexes_m
+
+       return bf.FetchPage(pageId, filepath)
+		 default:
+			 log.Printf("The table provided is not of the sys directory")
+			 return &Page{}, false
+	 }
+}
+
+func SaveSysPage(clg *CatalogManager,bf *BufferPool, tableName string, page *Page){
+		switch tableName{
+	   case "DATABASES":
+			 filepath := clg.SysDBDir+ sys_databases_m
+			 bf.SavePage(filepath, *page)
+		 case "TABLES":
+       filepath := clg.SysDBDir+ sys_tables_m
+			 bf.SavePage(filepath, *page)
+		 case "INDEXES":
+			 filepath := clg.SysDBDir+ sys_indexes_m
+			 bf.SavePage(filepath, *page)
+		 default:
+			 log.Printf("The table provided is not of the sys directory")
+	 }
 }
 

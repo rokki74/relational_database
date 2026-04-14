@@ -2,6 +2,7 @@ package sqlCompiler
 
 import (
 	"log"
+	"real_dbms/myDatabase"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ type CreateDBStmt struct{
 
 type CreateTBLStmt struct{
   TBLName string
+	Columns []myDatabase.Column
 }
 
 type CreateIDXStmt struct{
@@ -375,10 +377,43 @@ func (p *Parser) parseCreateDatabase() Statement{
 }
 
 func (p *Parser) parseCreateTable() Statement{
+	p.expect(IDENT)
  tableName := p.curToken.Value
- return &CreateTBLStmt{
+ stmt := &CreateTBLStmt{
    TBLName: tableName,
  }
+
+ p.expect(LPAREN)
+ columns := make([]myDatabase.Column,0)
+
+ for{
+	 colName := p.curToken.Value
+	 p.nextToken()
+	 temType := strings.ToUpper(p.curToken.Value)
+	 var colType myDatabase.ColumnType 
+	 switch temType{
+	 case "INT":
+		 colType = myDatabase.INT
+	 case "STRING":
+		 colType = myDatabase.STRING
+	 case "BOOLEAN":
+		 colType = myDatabase.BOOLEAN
+	 }
+
+	 col := myDatabase.Column{
+		 ColumnName: colName,
+		 ColumnType: colType,
+	 }
+
+	 columns = append(columns, col)
+	 if !p.match(COMMA){
+		 break
+	 }
+ }
+ p.expect(RPAREN)
+
+ stmt.Columns = columns
+ return stmt
 }
 
 func (p *Parser) parseCreateIndex() Statement{
@@ -391,9 +426,8 @@ func (p *Parser) parseCreateIndex() Statement{
 	for {
 	  col := p.curToken.Value
 		cols = append(cols, col)
-		p.expect(COMMA)
 
-		if p.curToken.Type == RPAREN{
+		if !p.match(COMMA){
 		  break
 		}
 	}

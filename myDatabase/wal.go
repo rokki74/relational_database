@@ -368,7 +368,7 @@ func (wal *WalManager) LogUpdateInPlace(tableName string, resType ResourceType, 
 	wal.Log(rec)
 }
 
-func (wal *WalManager) LogInsert(tableName string, resType ResourceType, newRowId RowId, writtenData []byte){
+func (wal *WalManager) LogInsert(tableName string, resType ResourceType, newRowId RowId, writtenData []byte) uint64{
   rec := &WalRecord{
 		ResourceType: resType,
 		TableName: tableName,
@@ -379,6 +379,8 @@ func (wal *WalManager) LogInsert(tableName string, resType ResourceType, newRowI
 	}
 
 	wal.Log(rec)
+
+	return wal.currentLSN
 }
 
 
