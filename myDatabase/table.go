@@ -111,11 +111,11 @@ func (tb *Table) writeFsm(pageId uint32, freeBytes uint16){
 }
 
 func (tb *Table)  SaveTable(){
-	tb.Db.Catalog.SaveTable(tb.Db.Dbname, tb)
+	tb.Db.SaveTable(tb)
 }
 
 func (tb *Table) DeleteTable(){
-	tb.Db.Catalog.DeleteTable(tb.Db.Dbname, tb)
+	tb.Db.DeleteTable(tb)
 }
 
 func (tl *Table) read(pageId uint32) ([]byte, bool){

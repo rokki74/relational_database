@@ -23,7 +23,7 @@ var cat_tables_file = systemPath +"/sys_tables.tbl"
 
 const lenOffset = 1 
 const typeOffset = 1
-const lastPageIdLen = 4 
+const LastPageIdLen = 4 
 
 type TableCata struct{
 	TableName string
@@ -70,8 +70,14 @@ func NewCatalog() (*CatalogManager, bool){
 
 //For create database workflow
 //Every db and tbl shall be responsible for persisting their catas to this catalog, so hard to manage from here intead the caller can just use a combination of clg pointer and extra steps to do it
-func (clg *CatalogManager) AddDatabaseCatalog(dbName string){
-	clg.CatalogEntry[dbName] = CatalogEntry{} 
+func (clg *CatalogManager) UpdateDatabaseCatalog(db *Database_Manager, catEntry *CatalogEntry){
+	entry, ok := clg.CatalogEntry[db.Dbname]
+	if ok{
+    entry.UpdateCatalogEntryWith(catEntry)
+		return
+	}
+
+	clg.CatalogEntry[db.Dbname] = *catEntry
 }
 
 //For the system starting
@@ -331,6 +337,36 @@ func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []P
 			table_pages = make([]Page, 0, ScanPages)
 		}
 	}
+}
+
+func (clg *CatalogManager) AddDatabaseCatalog(dbName string){
+	if _, ok := clg.CatalogEntry[dbName]; ok{
+		log.Printf("Database already exists!")
+		return
+	}
+	clg.CatalogEntry[dbName] = CatalogEntry{}
+}
+
+func (ce *CatalogEntry)UpdateCatalogEntryWith(catEntry *CatalogEntry){
+	//update tables 
+	 for updatek, updatev := range catEntry.Tables{
+		 existentTable, keyExisted := ce.Tables[updatek]
+		 if keyExisted{
+			 existentTable.Indexes = updatev.Indexes
+			 existentTable.TableSchema = updatev.TableSchema
+			 existentTable.LastPageId = updatev.LastPageId
+			 existentTable.FirstFramePageId = updatev.FirstFramePageId
+
+			 ce.Tables[updatek] = existentTable
+			 break
+		 }
+
+		 ce.Tables[updatek] = updatev
+	}
+}
+
+func (clg *CatalogManager) CatalogScout(){
+
 }
 
 

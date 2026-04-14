@@ -20,7 +20,7 @@ func GetSystemPath() string{
 func InitSystem() *DBSystem{
 	log.Printf("SYSTEM STARTING..")
 	clgMngr ,_ := catalog.NewCatalog()
-	clgMngr.LoadDatabaseCatalog()
+	clgMngr.LoadCatalog()
 
 	log.Printf("Started successfully!")
   return &DBSystem{
@@ -38,7 +38,7 @@ func (syst *DBSystem) GetDatabase(dbName string) (*Database_Manager, bool){
 	dbMngr.Catalog = cata
 	dbMngr.Dbname = dbName
 	dbMngr.Pager = &syst.Pager
-	dbMngr.InitDb()
+	dbMngr.InitDB()
   
 	syst.NewSession(dbMngr)
 	return dbMngr, true

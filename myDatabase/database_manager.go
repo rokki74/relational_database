@@ -84,8 +84,20 @@ func (db *Database_Manager) GetFsmPath(tableName string) (string, bool){
   return db.DbPath+"/"+tableName+".fsm", true
 }
 
-func (db Database_Manager) SaveTable(table *Table){
-	db.Catalog.SaveTable(db.Dbname, table)
+func (db Database_Manager) SaveTable(tb *Table){
+	db.Catalog.SaveTable(db.Dbname, tb)
+	tablePath := GetSystemPath()+ db.DbPath +tb.TableName+".tbl"
+	
+	pg := Page{}
+	pg.Init(uint32(0))
+	db.BufferPool.SavePage(tablePath, pg)
+}
+
+func (db *Database_Manager) DeleteTable(tb *Table){
+	db.Catalog.DeleteTable(db.Dbname, tb)
+
+	tablePath, _ := db.GetTablePath(tb.TableName)
+	db.BufferPool.DeleteTableName(tablePath)
 }
 
 func (db *Database_Manager) GetIndexPath(tableName string) (string, bool){
