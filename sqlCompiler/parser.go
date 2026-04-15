@@ -111,6 +111,8 @@ func (p *Parser) nextToken() {
 
 func (p *Parser) expect(t TokenType) {
     if p.curToken.Type != t {
+			//This is becoming ambigous, how do i make it get me human readable types only?
+			//How i regret it i should have redirected the runtime logs to a file
 				log.Printf("Expected a %v found value %v of type %v", t,p.curToken.Value,p.curToken.Type)
 				return
     }
@@ -353,9 +355,12 @@ func (p *Parser) parseDelete() Statement{
 }
 
 func (p *Parser) parseCreate() Statement{
+	log.Printf("parse create was hit, expecting a CREATE keyword now!")
 	p.expect(CREATE)
 	identType := p.curToken.Value
 	identType = strings.ToUpper(identType)
+	log.Printf("done expecting CREATE keyword, looking at the identType, it is a: %v", identType)
+	log.Printf("expecting an IDENT from now!")
 	p.expect(IDENT)
 	switch identType{
 	case "TABLE":
@@ -378,22 +383,30 @@ func (p *Parser) parseCreateDatabase() Statement{
 }
 
 func (p *Parser) parseCreateTable() Statement{
-	p.expect(IDENT)
+	log.Printf("parse create table hit, expecting a TABLE keyword as an IDENT now!")
  tableName := p.curToken.Value
+ log.Printf("Upto this point we got a tableName from the statement, it is: %v", tableName)
  stmt := &CreateTBLStmt{
    TBLName: tableName,
  }
 
+ log.Printf("Expecting the table name so next we can expect an LPAREN")
+ p.expect(IDENT)
  p.expect(LPAREN)
+ log.Printf("a LPAREN is already expected, moving into deserializing the columns now")
+ log.Printf("the LPAREN id no is: %v", LPAREN)
  columns := make([]myDatabase.Column,0)
 
  for{
 	 colName := p.curToken.Value
-	 p.nextToken()
+   log.Printf("The net put into the columns river caught a fish column called: %v", colName)
+	 p.expect(IDENT)
 	 temType := strings.ToUpper(p.curToken.Value)
+	 log.Printf("The anticipated column type is: %v", temType)
 	 var colType myDatabase.ColumnType 
 	 switch temType{
 	 case "INT":
+		 log.Printf("The int type case")
 		 colType = myDatabase.INT
 	 case "STRING":
 		 colType = myDatabase.STRING
@@ -407,13 +420,20 @@ func (p *Parser) parseCreateTable() Statement{
 	 }
 
 	 columns = append(columns, col)
+	 log.Printf("Expecting the column type")
+	 p.expect(IDENT)
+	 log.Printf("ColumnType expected, now a comma")
 	 if !p.match(COMMA){
+		 log.Printf("the token didn't match a comma, breaking..")
 		 break
 	 }
+
+		 log.Printf("continuing with the column loop..")
  }
  p.expect(RPAREN)
 
  stmt.Columns = columns
+ log.Printf("parseCreateTable finished successfully!")
  return stmt
 }
 

@@ -83,6 +83,8 @@ func (e *Executor) execUseStmt(stmt *UseStmt){
 
 	log.Printf("Get database was a success, adding it as the current session of the executor, DBNAME: %v", dbMngr.Dbname)
 	e.CurrentDB = dbMngr
+
+	log.Printf("checking whether the e.CurrentDB is set: CurrentDB[%v]", e.CurrentDB.Dbname)
 }
 
 func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
@@ -335,7 +337,7 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
     return values
 }
 
-func (e Executor) execDelete(stmt *DeleteStmt){
+func (e *Executor) execDelete(stmt *DeleteStmt){
 	db := e.CurrentDB
 		 //let's perform a crude test here for the time being and see 
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
@@ -498,7 +500,7 @@ func (tp *Tuple) Get(colName string) (TupData, bool){
 	return v, false
 }
 
-func (e Executor) buildTup(schema myDatabase.Schema, rowBs []byte) Tuple{
+func (e *Executor) buildTup(schema myDatabase.Schema, rowBs []byte) Tuple{
  columns := schema.Columns 
  tuple := Tuple{}
  
@@ -657,6 +659,9 @@ func (e *Executor) execCreateDB(stmt *CreateDBStmt){
 }
 
 func (e *Executor) execCreateTbl(stmt *CreateTBLStmt){
+	log.Printf("execCreateTbl hit. Caution, the session might be nil..")
+
+	log.Printf("checking whether the e.CurrentDB is set: CurrentDB[%v]", e.CurrentDB)
   db := e.CurrentDB
 		 //let's perform a crude test here for the time being and see 
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{

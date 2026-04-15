@@ -54,7 +54,9 @@ func (s *Server) handleClient(conn net.Conn) {
 	fmt.Println("Client connected:", conn.RemoteAddr())
 
 	reader := bufio.NewReader(conn)
-
+  executor := &sqlCompiler.Executor{
+		Syst: s.RealDB,
+	}
 	for {
 		// Prompt
 		conn.Write([]byte("db > "))
@@ -72,7 +74,7 @@ func (s *Server) handleClient(conn net.Conn) {
 		}
 
 		// Run SQL pipeline
-		result, err := s.executeSQL(sql)
+		result, err := s.executeSQL(sql, executor)
 		if err != nil {
 			conn.Write([]byte("ERROR: " + err.Error() + "\n"))
 			continue
@@ -83,13 +85,11 @@ func (s *Server) handleClient(conn net.Conn) {
 	}
 }
 
-func (s *Server) executeSQL(sql string) ([][]string, error) {
+func (s *Server) executeSQL(sql string, executor *sqlCompiler.Executor) ([][]string, error) {
 	lexer := sqlCompiler.NewLexer(sql)
 	parser := sqlCompiler.NewParser(lexer)
 
-  executor := sqlCompiler.Executor{
-		Syst: s.RealDB,
-	}
+
 
 	stmt := parser.ParseStatement()
 	if stmt == nil {

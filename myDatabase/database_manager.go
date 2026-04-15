@@ -3,7 +3,6 @@ package myDatabase
 import (
 	"log"
 	"os"
-	"io/fs"
 	"bytes"
 )
 
@@ -21,7 +20,7 @@ type Database_Manager struct{
 
 func (syst *DBSystem) CreateDatabase(name string) bool{
  //i cannot ascertain as of now whether the ModeDir is really used corectly to create dir
- err := os.Mkdir(GetSystemPath()+"/"+name, fs.ModeDir)
+ err := os.Mkdir(GetSystemPath()+"/"+name, 0755)
  if err !=nil{
 	 log.Printf("Could not build the database dir! %",err)
 	 return false
