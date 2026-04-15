@@ -5,6 +5,7 @@ package myDatabase
 import(
   "encoding/binary"
 	"os"
+	"log"
 )
 
 type FSMManager struct{
@@ -12,7 +13,9 @@ type FSMManager struct{
 }
 
 func NewFsmManager() *FSMManager{
-	return &FSMManager{ TablesRecorded: make(map[string]uint32, 0)}
+	fsmMngr := &FSMManager{ TablesRecorded: make(map[string]uint32, 0)}
+	log.Printf("New fsm Manager successfully initialized")
+	return fsmMngr
 }
 
 func (fsm *FSMManager) FillFsms(db *Database_Manager, tableNames []string){

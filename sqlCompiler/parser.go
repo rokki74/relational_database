@@ -220,6 +220,7 @@ func (p *Parser) parsePrimary() (Expr, bool) {
 func (p *Parser) ParseStatement() Statement{
 	switch p.curToken.Type{
 	case USE:
+		log.Printf("found a use statement, ready to handle it")
 		return p.ParseUse()
 	case SELECT:
 		return p.parseSelect()

@@ -26,7 +26,8 @@ func (syst *DBSystem) CreateDatabase(name string) bool{
 	 log.Printf("Could not build the database dir! %",err)
 	 return false
  }
-
+ 
+ log.Printf("The database created successfully, updating it into the catalog")
  syst.Catalog.AddDatabaseCatalog(name)
  return true
 }
@@ -43,6 +44,7 @@ func (db *Database_Manager) InitDB(){
 
 	db.NewTransactionManager()
 	db.FillFSM()
+	log.Printf("database successfully initialized!")
 }
 
 type ObjectType int

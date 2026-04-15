@@ -47,6 +47,8 @@ type IndexFrame struct{
 	IndexName string
 }
 
+//This was my suspected culprit, everything may be working but then the maps within this CatalogEntry can't be accessed as they
+//haven't be initialized yet thus i need to use make on the clEntry variable i recently used! going back there
 type CatalogEntry struct{
 	Tables map[string]*Table
 	IndexMetas map[IndexFrame]IndexCata
@@ -413,11 +415,16 @@ func (clg *CatalogManager) ScanFile(fileName string, ScanPages uint8, c chan []P
 }
 
 func (clg *CatalogManager) AddDatabaseCatalog(dbName string){
+	log.Printf("Add database catalog hit, in a bid to add the dbName into in-mem catalog")
 	if _, ok := clg.CatalogEntry[dbName]; ok{
 		log.Printf("Database already exists!")
 		return
 	}
-	clg.CatalogEntry[dbName] = CatalogEntry{}
+	clEntry := CatalogEntry{}
+  clEntry.Tables = make(map[string]*Table, 0)
+	clEntry.IndexMetas = make(map[IndexFrame]IndexCata, 0)
+	clg.CatalogEntry[dbName] = clEntry
+	log.Printf("Db added to the catalog successfully!")
 }
 
 func (ce *CatalogEntry)UpdateCatalogEntryWith(catEntry *CatalogEntry){

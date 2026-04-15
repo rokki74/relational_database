@@ -55,7 +55,8 @@ var keywords = map[string]TokenType{
     "INTO":   INTO,
     "VALUES": VALUES,
     "ON":     ON,
-}
+		"USE": USE,
+	}
 
 type Lexer struct {
     input        string

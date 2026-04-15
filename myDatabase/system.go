@@ -21,10 +21,12 @@ func InitSystem() *DBSystem{
 	clgMngr ,_ := NewCatalog()
 	log.Printf("NewCatalog done!")
 	clgMngr.LoadCatalog()
-
+//this should be the perfect solution here should really handle the panic on a nil map i think,lets look at the rest of runtime erros suggestion
+	sess := make(map[string]*Database_Manager, 0)
 	log.Printf("Started successfully!")
   return &DBSystem{
     Catalog: clgMngr,
+		Sessions: sess,
 	}
 }
 
@@ -32,6 +34,7 @@ func (syst *DBSystem) GetDatabase(dbName string) (*Database_Manager, bool){
 	_, ok := syst.Catalog.CatalogEntry[dbName]
 	if !ok{
 		log.Printf("Database does not exist!")
+		log.Printf("or the Database id is yet to updated into the catalog map!")
 		return nil, false
 	}
 
@@ -50,6 +53,8 @@ func (syst *DBSystem) NewSession(db *Database_Manager){
   if syst.InSession(db){
 	  return
 	}
+
+	log.Printf("Adding the db[%v] to sessions as it didn't exist", db.Dbname)
   syst.Sessions[db.Dbname] = db
 }
 

@@ -71,78 +71,82 @@ func (e *Executor) Execute(stmt Statement) [][]string {
 		return nil
 }
 
+//I highly suspect this to also be errenous just don't know where exactly so i'm trying to look at it
+//let's run it again see what happens
 func (e *Executor) execUseStmt(stmt *UseStmt){
+  log.Printf("executing the use statement, trying to get the db from system catalog")
 	dbMngr, ok := e.Syst.GetDatabase(stmt.DBName)
 	if !ok{
-		log.Printf("Database unavailable for table deletion operation!")
+		log.Printf("Database unavailable for the executor to use in its operation!")
 		return
 	}
 
+	log.Printf("Get database was a success, adding it as the current session of the executor, DBNAME: %v", dbMngr.Dbname)
 	e.CurrentDB = dbMngr
 }
 
 func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
-	  if e.CurrentDB == nil{
-			log.Printf("Database is not set, cannot execute unnamed database for the statement")
-			return nil, false
-		}
-    
-		db := e.CurrentDB
+	 //I think checking this way might be the problem so how do i do this? can't directly check if it is a nil??
+	 //Okay let me print the e.CurrentDB and really see
+	 log.Printf("e.CurrentDB is: %v", e.CurrentDB)
+			db := e.CurrentDB
+			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
+				log.Printf("Database doesn't exist for real")
+				return nil, false
+			}			
+			table, exists := db.GetTable(stmt.TBLName)
+			if !exists{
+				log.Printf("Table does not exist")
+				return nil, false
+			}
 
-    table, exists := db.GetTable(stmt.TBLName)
-		if !exists{
-			log.Printf("Table does not exist")
-			return nil, false
-		}
+			var results [][]string
+			tablePath, okay := db.GetTablePath(table.TableName)
+			if !okay{
+				return nil, false
+			}
+			for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
+					page, present := db.BufferPool.FetchPage(pageID, tablePath)
+					if !present{
+						log.Printf("Page not found! [TablePath: %v, PageId: %v] ", tablePath, pageID)
+						continue
+					}
+					header := page.Read_header()
+					for s := 0; s < int(header.RowCount); s++ {
+							if !page.SlotDead(s) {
+									continue
+							}
 
-    var results [][]string
+							tupleBs := page.Read_row(s)
+							//Build tuple
+							tuple := e.buildTup(table.TableSchema, tupleBs)
+							tp := rowByteIntoTuple(table.TableSchema, tupleBs)
+							if stmt.Where != nil {
+									if !e.evalExpr(stmt.Where, *tp) {
+											continue
+									}
+							}
 
-    tablePath, okay := db.GetTablePath(table.TableName)
-    if !okay{
-			return nil, false
-		}
-		for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
-        page, present := db.BufferPool.FetchPage(pageID, tablePath)
-        if !present{
-					log.Printf("Page not found! [TablePath: %v, PageId: %v] ", tablePath, pageID)
-					continue
-				}
-				header := page.Read_header()
-
-        for s := 0; s < int(header.RowCount); s++ {
-            if !page.SlotDead(s) {
-                continue
-            }
-
-            tupleBs := page.Read_row(s)
-						//Build tuple
-						tuple := e.buildTup(table.TableSchema, tupleBs)
-						tp := rowByteIntoTuple(table.TableSchema, tupleBs)
-            if stmt.Where != nil {
-                if !e.evalExpr(stmt.Where, *tp) {
-                    continue
-                }
-            }
-
-            row := e.project(stmt.Columns, tuple)
-            results = append(results, row)
-        }
-    }
-    return results, true
+							row := e.project(stmt.Columns, tuple)
+							results = append(results, row)
+					}
+			}
+			return results, true
 }
 
-func (e *Executor) execInsert(stmt *InsertStmt) {
-	  if e.CurrentDB == nil{
-			log.Printf("Database is not set, cannot execute unnamed database for the statement")
-			return
-		}
-    
+func (e *Executor) execInsert(stmt *InsertStmt) { 
 		db := e.CurrentDB
-    table, exists := db.GetTable(stmt.TBLName)
-		if !exists{
-			log.Printf("Table does not exist")
-			return
-		}
+		 //let's perform a crude test here for the time being and see 
+			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
+				log.Printf("Critical, the database is really not set or unavailable, yeah")
+				return
+			}
+			table, exists := db.GetTable(stmt.TBLName)
+			if !exists{
+				log.Printf("Table does not exist")
+				return
+			}
+    
 
     colTypes := make([]myDatabase.ColumnType, len(stmt.Columns))
 		colNames := make([]string, len(stmt.Columns))
@@ -332,12 +336,12 @@ func (e *Executor) evalInsertValues(exprs []Expr) []string {
 }
 
 func (e Executor) execDelete(stmt *DeleteStmt){
-  if e.CurrentDB == nil{
-		log.Printf("Database not selected!")
-		return
-	}
-  
 	db := e.CurrentDB
+		 //let's perform a crude test here for the time being and see 
+			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
+				log.Printf("Critical, the database is really not set or unavailable, yeah")
+				return
+			}
 	table, exists := db.GetTable(stmt.TBLName)
 	if !exists{
 		log.Printf("Database does not exist, cannot delete")
@@ -381,11 +385,12 @@ func (e Executor) execDelete(stmt *DeleteStmt){
 
 
 func (e *Executor) execUpdate(stmt *UpdateStmt) {
-	  if e.CurrentDB == nil{
-			log.Printf("Database is not set, cannot execute unnamed database for the statement")
-			return
-		}
 		db := e.CurrentDB
+		 //let's perform a crude test here for the time being and see 
+			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
+				log.Printf("Critical, the database is really not set or unavailable, yeah")
+				return
+			}
     table, exists := db.GetTable(stmt.TBLName)
 		if !exists{
 			log.Printf("Cannot update, --Database doesn't exist!")
@@ -652,20 +657,23 @@ func (e *Executor) execCreateDB(stmt *CreateDBStmt){
 }
 
 func (e *Executor) execCreateTbl(stmt *CreateTBLStmt){
-  if e.CurrentDB ==nil{
-			log.Printf("Database is not set, cannot execute unnamed database for the statement")
-			return
-		}
-  dbMngr := e.CurrentDB
-  dbMngr.CreateTable(stmt.TBLName, stmt.Columns)
+  db := e.CurrentDB
+		 //let's perform a crude test here for the time being and see 
+			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
+				log.Printf("Critical, the database is really not set or unavailable, yeah")
+				return
+			}
+	log.Printf("The db does exist and now going to create the table!")
+  db.CreateTable(stmt.TBLName, stmt.Columns)
 }
 
 func (e *Executor) execCreateIDX(stmt *CreateIDXStmt){
-  if e.CurrentDB == nil{
-			log.Printf("Database is not set, cannot execute unnamed database for the statement")
-			return
-		}
    dbMngr := e.CurrentDB
+		 //let's perform a crude test here for the time being and see 
+			if _, prsnt := e.Syst.GetDatabase(dbMngr.Dbname); !prsnt{
+				log.Printf("Critical, the database is really not set or unavailable, yeah")
+				return
+			}
 	 table, ok := dbMngr.GetTable(stmt.ParentTableName)
 	 if !ok{
 		 log.Printf("Table not available, might be deleted! %v", stmt.ParentTableName)
