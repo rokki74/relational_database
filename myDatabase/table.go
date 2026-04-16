@@ -50,11 +50,14 @@ type Table struct {
 }
 
 func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, bool){
+	log.Printf("Creating table with name [%v]",name)
   clgEntry := db.Catalog.CatalogEntry[db.Dbname]
-	_, exists := clgEntry.Tables[name]
+  tabl, exists := clgEntry.Tables[name]
 	if !exists{
 		log.Printf("Table already exists!")
-		return Table{}, false
+		log.Printf("DEBUGGING THE EXISTENT TABLE[%v], tableName: %v, schema: %v", tabl,tabl.TableName, tabl.TableSchema)
+		db.SaveTable(tabl)
+		return *tabl, false
 	}
 
 		schm := Schema{
@@ -70,7 +73,7 @@ func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, b
 	clgEntry.Tables[name] = &table
 	db.SaveTable(&table)
 
-	return Table{}, false
+	return table, false
 }
 
 func (db *Database_Manager) GetTable(name string) (Table, bool){

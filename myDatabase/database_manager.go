@@ -88,10 +88,10 @@ func (db *Database_Manager) GetFsmPath(tableName string) (string, bool){
 func (db Database_Manager) SaveTable(tb *Table){
 	db.Catalog.SaveTable(db.Dbname, tb)
 	tablePath := GetSystemPath()+ db.DbPath +tb.TableName+".tbl"
-	
-	pg := Page{}
-	pg.Init(uint32(0))
-	db.BufferPool.SavePage(tablePath, pg)
+  
+
+	log.Printf("db.SaveTable hit, saving into path: %v", tablePath)
+	db.BufferPool.FlushTable(tablePath, tb)
 }
 
 func (db *Database_Manager) DeleteTable(tb *Table){

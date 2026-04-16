@@ -63,8 +63,35 @@ func (bf *BufferPool) SavePage(fileName string, page Page){
 	bf.frames[bufferKey] = frm
 }
 
+func (bf *BufferPool) FlushTable(tablePath string, tb *Table){
+	log.Printf("flushing the whole table to disk..")
+	if tb.LastPageId <1{
+		log.Printf("Flush page found less than one pages for the table, flushing only one..")
+		pg,ok := bf.FetchPage(uint32(0), tablePath)
+		if !ok{
+			log.Printf("No in-mem or disk page found for the table: %v, so saving and persisting it's first", tb.TableName)
+			page := Page{}
+			page.Init(0)
+			bf.SavePage(tablePath, page)
+			bf.Pager.WritePage(tablePath, *pg)
+			return
+	  }
+
+		log.Printf("An already existent page found for the table: %v, saving and persisting it's first", tb.TableName)
+		bf.Pager.WritePage(tablePath, *pg)
+		return
+	}
+
+	log.Printf("Flush page found more pages flushing all..")
+	for pgId :=uint32(0); pgId <=tb.LastPageId;pgId++{
+		 page,ok := bf.FetchPage(pgId, tablePath)
+		 if ok{
+		    bf.Pager.WritePage(tablePath, *page)
+		 }
+	 }
+}
+
 func (bf *BufferPool) evict_pages(){
-	
 	for key, val := range bf.frames{
 
 	     if val.PinCount == 0{

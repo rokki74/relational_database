@@ -29,6 +29,7 @@ type Pager struct{
 
 
 func (pgr *Pager) WritePage(tableFileName string, page Page) bool {
+	log.Printf("pager hit, writing page..")
 	f, err := os.OpenFile(tableFileName, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		log.Printf("Error opening file for write: %v", err)
@@ -50,6 +51,7 @@ func (pgr *Pager) WritePage(tableFileName string, page Page) bool {
 	}
 
 	f.Sync()
+	log.Printf("page written to disk successfully!")
 	return true
 }
 
