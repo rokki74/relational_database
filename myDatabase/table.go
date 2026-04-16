@@ -53,13 +53,14 @@ func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, b
 	log.Printf("Creating table with name [%v]",name)
   clgEntry := db.Catalog.CatalogEntry[db.Dbname]
   tabl, exists := clgEntry.Tables[name]
-	if !exists{
+	if exists{
 		log.Printf("Table already exists!")
 		log.Printf("DEBUGGING THE EXISTENT TABLE[%v], tableName: %v, schema: %v", tabl,tabl.TableName, tabl.TableSchema)
 		db.SaveTable(tabl)
 		return *tabl, false
 	}
 
+	log.Printf("Table confirmed not to exist, creating it..")
 		schm := Schema{
 		   Columns: columns,
      	}
@@ -70,6 +71,9 @@ func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, b
 			 LastPageId: 0,
 	   }
 
+  if clgEntry.Tables == nil{
+		clgEntry.Tables = make(map[string]*Table, 0)
+	}	
 	clgEntry.Tables[name] = &table
 	db.SaveTable(&table)
 
@@ -77,13 +81,18 @@ func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, b
 }
 
 func (db *Database_Manager) GetTable(name string) (Table, bool){
-  clgEntry := db.Catalog.CatalogEntry[db.Dbname]
+	log.Printf("Get table called with args: dbName[%v], tblName:[%v]",db.Dbname, name)
+  clgEntry, ok := db.Catalog.CatalogEntry[db.Dbname]
+	if !ok{
+		log.Printf("Can't insert to database not present in the catalog")
+	}
 	_, exists := clgEntry.Tables[name]
 	if !exists{
 		log.Printf("Table Doesn't exist!")
 		return Table{}, false
 	}
-
+ 
+	log.Printf("table gotten by GetTable, returning it..")
   return *clgEntry.Tables[name], true
 }
 
@@ -313,7 +322,7 @@ func (tb *Table) FindColumnTypeAndPos(col string) (ColumnType, uint8, bool){
 			return columns[i].ColumnType, uint8(i), true
 		}
 	}
-	log.Printf("The column [%col] couldn't be found in table schema!", col)
+	log.Printf("The column [%v] couldn't be found in table schema!", col)
 
 	return -1, uint8(0), false
 }

@@ -1,4 +1,4 @@
-packag sqlCompiler
+package sqlCompiler
 
 import (
 	"log"
@@ -136,7 +136,8 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 			return results, true
 }
 
-func (e *Executor) execInsert(stmt *InsertStmt) { 
+func (e *Executor) execInsert(stmt *InsertStmt) {
+	  log.Printf("Insert stmt hit..")
 		db := e.CurrentDB
 		 //let's perform a crude test here for the time being and see 
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
@@ -149,7 +150,7 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 				return
 			}
     
-
+    log.Printf("Table found, proceeding with the insert")
     colTypes := make([]myDatabase.ColumnType, len(stmt.Columns))
 		colNames := make([]string, len(stmt.Columns))
     for _, colName := range stmt.Columns{
@@ -163,18 +164,21 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 
     // 1. Evaluate values
     values := make([]string, 0)
+		log.Printf("Evaluating the values for insert..")
 		for _, val := range stmt.Values{
 			values = append(values, e.evalValue(val, Tuple{}))
 		}
-
+    log.Printf("Done evaluating")
     // 2. Encode tupleBytes/serializedBs 
 		tupleBytes := table.SerializeColumnValues(values, colTypes)
 
     // 3. Find page with space (FSM)
 		tblPath, _ := db.GetTablePath(table.TableName)
 		fsmPath, _ := db.GetObjectPath(table.TableName, myDatabase.FSMTYPE)
+		log.Printf("looking to find a fitting page..")
     pageID, fsmPage, availed := db.BufferPool.FittingPage(&table, uint16(len(tupleBytes)))
 		if availed{
+			  log.Printf("A fitting page was found, using it..")
 				page, got := db.BufferPool.FetchPage(pageID, tblPath)
 				if got{
 					rowId, _ := page.Insert_row(tupleBytes)
@@ -190,22 +194,10 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 					log.Printf("Insert was a success!")
 				}
 
-				// fallback: allocate new page
-				pg := db.BufferPool.AllocatePage(&table)
-				db.BufferPool.SavePage(tblPath, *pg)
-				// 5. Insert into page
-				rowId, _ := page.Insert_row(tupleBytes)
-				
-				// 6. WAL logging
-				db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
-
-				// 7. Update indexes
-				//e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
-      db.InsertIntoIndexes(&table, *rowId, tupleBytes)
-			log.Printf("Insert was a success!")
-		   return
+				log.Printf("Using fsm page was unsuccessful, switching..")
 		}
-    
+   
+		log.Printf("Fitting page not found, settling for the last page instead..")
 		page, found := db.BufferPool.FetchPage(table.LastPageId, tblPath)
 		if !found{
 			

@@ -31,9 +31,11 @@ func (syst *DBSystem) CreateDatabase(name string) bool{
  return true
 }
 
-func (db *Database_Manager) InitDB(){
+//someone is Initing DB each time making the databse loose it's catalog then..
+func (db *Database_Manager) InitDB(syst *DBSystem){
 	db.WAL = NewWalManager(GetSystemPath()+"/"+db.Dbname)
 	db.DbPath = GetSystemPath()+"/"+db.Dbname
+	db.Pager = &syst.Pager
 
 	db.BufferPool = &BufferPool{
 		Pager: db.Pager,
@@ -42,6 +44,7 @@ func (db *Database_Manager) InitDB(){
 	}
 
 	db.NewTransactionManager()
+	db.Catalog = syst.Catalog
 	db.FillFSM()
 	log.Printf("database successfully initialized!")
 }
@@ -77,21 +80,26 @@ func (db *Database_Manager) GetTablePath(tableName string) (string, bool){
 }
 
 func (db *Database_Manager) GetFsmPath(tableName string) (string, bool){
+	log.Printf("GetFsmPath hit..\n Getting fsm path for the tablename %v", tableName)
   _, exists := db.GetTable(tableName)
 	if !exists{
+		log.Printf("didn't find the table in the database[%v]", db.Dbname)
 		return "", false
 	}
 
-  return db.DbPath+"/"+tableName+".fsm", true
+
+	log.Printf("so far so good, building the fsmPath string..")
+	fsmPath := db.DbPath+"/"+tableName+".fsm"
+	log.Printf("returning fsm path[%v]",fsmPath)
+	return fsmPath,true
 }
 
 func (db Database_Manager) SaveTable(tb *Table){
-	db.Catalog.SaveTable(db.Dbname, tb)
-	tablePath := GetSystemPath()+ db.DbPath +tb.TableName+".tbl"
-  
 
+	tablePath := db.DbPath+"/"+tb.TableName+".tbl" 
 	log.Printf("db.SaveTable hit, saving into path: %v", tablePath)
 	db.BufferPool.FlushTable(tablePath, tb)
+	db.Catalog.SaveTable(db.Dbname, tb)
 }
 
 func (db *Database_Manager) DeleteTable(tb *Table){

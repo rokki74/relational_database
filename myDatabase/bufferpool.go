@@ -51,6 +51,7 @@ func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
 }
 
 func (bf *BufferPool) SavePage(fileName string, page Page){
+	log.Printf("save page hit..")
 	header := page.Read_header()
 	bufferKey := BufferKey{fileName, header.PageId}
   
@@ -59,28 +60,27 @@ func (bf *BufferPool) SavePage(fileName string, page Page){
     PinCount: 1,
     Dirty: true,
 	}
-
+  log.Printf("bufferKey: %v", bufferKey)
+	if bf.frames ==nil{
+		log.Printf("the buffer frames not initialized yet, initializing the map..")
+		bf.frames = make(map[BufferKey]Frame)
+	}
+	log.Printf("setting the buffer frame..")
 	bf.frames[bufferKey] = frm
+	log.Printf("save page was a success")
 }
 
 func (bf *BufferPool) FlushTable(tablePath string, tb *Table){
 	log.Printf("flushing the whole table to disk..")
 	if tb.LastPageId <1{
 		log.Printf("Flush page found less than one pages for the table, flushing only one..")
-		pg,ok := bf.FetchPage(uint32(0), tablePath)
-		if !ok{
 			log.Printf("No in-mem or disk page found for the table: %v, so saving and persisting it's first", tb.TableName)
 			page := Page{}
 			page.Init(0)
+			bf.Pager.WritePage(tablePath, page)
 			bf.SavePage(tablePath, page)
-			bf.Pager.WritePage(tablePath, *pg)
 			return
 	  }
-
-		log.Printf("An already existent page found for the table: %v, saving and persisting it's first", tb.TableName)
-		bf.Pager.WritePage(tablePath, *pg)
-		return
-	}
 
 	log.Printf("Flush page found more pages flushing all..")
 	for pgId :=uint32(0); pgId <=tb.LastPageId;pgId++{
@@ -120,15 +120,27 @@ func (bf *BufferPool) DeleteTableName(fileName string){
 func (bf *BufferPool) MarkDirty(fileName string, pageId uint32){
 	bufKey := BufferKey{fileName, pageId}
 	datum, ok := 	bf.frames[bufKey]
-	if !ok{
+	if ok{
+		datum.Dirty = true
+		bf.frames[bufKey] = datum
 		return
-	}
+  }
 
-	datum.Dirty = true
+	log.Printf("pageId[%v] of table[%v] marked dirty..", pageId, fileName)
 }
 
 func (bf *BufferPool) FittingPage(tb *Table, length uint16) (uint32, *Page, bool){
-	fsmPath, _ := tb.Db.GetFsmPath(tb.TableName)
+	log.Printf("FittingPage hit..\n finding fsm path to get free page of atleast size[%v]",length)
+	fsmPath, prsnt := tb.Db.GetFsmPath(tb.TableName)
+	if !prsnt{
+		log.Printf("problem, cannot find fsmPath, returning..")
+		return 0, nil, false
+	}
+	log.Printf("fsmPath found at FittingPage func, path[%v]",fsmPath)
+	log.Printf("Looking at Fsm table records next..")
+	if bf.Fsm.TablesRecorded ==nil{
+		bf.Fsm.TablesRecorded = make(map[string]uint32, 0)
+	}
 	lastFramePageId,ok := bf.Fsm.TablesRecorded[tb.TableName]
 	if !ok{
 		log.Printf("The fsm records not found for the table %v",tb.TableName)
@@ -136,7 +148,7 @@ func (bf *BufferPool) FittingPage(tb *Table, length uint16) (uint32, *Page, bool
 	}
 
 	//Just remembered i need to scan from the last fsm page as it shall be the freshest then
-	for pId :=lastFramePageId; pId>=0; pId--{
+	for pId :=lastFramePageId; pId>=0; pId--{//i have to placeit here though uint32 is always >=0
 		fsmPage, prsnt := bf.FetchPage(pId, fsmPath)
 		if !prsnt{
 			continue

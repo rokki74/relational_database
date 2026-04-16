@@ -38,29 +38,31 @@ func (syst *DBSystem) GetDatabase(dbName string) (*Database_Manager, bool){
 		return nil, false
 	}
 
-	catalog := CatalogManager{}
-	dbMngr := &Database_Manager{}
-	dbMngr.Catalog = &catalog
-	dbMngr.Dbname = dbName
-	dbMngr.Pager = &syst.Pager
-	dbMngr.InitDB()
+	log.Printf("The system knows the database[%v] exists", dbName)
   
-	syst.NewSession(dbMngr)
-	return dbMngr, true
+	return syst.NewSession(dbName), true
 }
 
-func (syst *DBSystem) NewSession(db *Database_Manager){
-  if syst.InSession(db){
-	  return
+func (syst *DBSystem) NewSession(databaseName string) *Database_Manager{
+	probeDb, sessioned := syst.InSession(databaseName)
+	if sessioned{
+		log.Printf("database already in session, skipping initializing it..")
+	  return probeDb
 	}
 
-	log.Printf("Adding the db[%v] to sessions as it didn't exist", db.Dbname)
-  syst.Sessions[db.Dbname] = db
+	log.Printf("Adding the db[%v] to sessions as it didn't exist", databaseName)
+
+	log.Printf("initializing then later adding database into session..")
+	dbMngr := &Database_Manager{Dbname: databaseName}
+	dbMngr.InitDB(syst)
+  syst.Sessions[databaseName] = dbMngr 
+
+	return dbMngr
 }
 
-func (syst *DBSystem) InSession(db *Database_Manager) bool{
-  _, in := syst.Sessions[db.Dbname]
-	return in
+func (syst *DBSystem) InSession(dbName string) (*Database_Manager , bool){
+  dbMngr, in := syst.Sessions[dbName]
+	return dbMngr,in
 }
 
 func (syst *DBSystem) EndSession(db *Database_Manager){

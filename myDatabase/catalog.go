@@ -199,17 +199,17 @@ func PersistDB(){
 func (clg CatalogManager) SaveTable(dbName string, table *Table){
 	dbEntry, ok := clg.CatalogEntry[dbName]
 	if !ok{
-		log.Printf("Can't save table into an uninitialised database in the catalog")
-		return
+		log.Printf("Can't save table into an uninitialized database in the catalog, database probably doesn't exist")
 	}
 
 	_, k := dbEntry.Tables[table.TableName]
 	if k{
-		log.Printf("Table already exists!")
+		log.Printf("Table already exists in the catalog!")
 		return
 	} 
 
 	dbEntry.Tables[table.TableName] = table
+	log.Printf("Table saved into catalog")
 }
 
 func (clg CatalogManager) DeleteTable(dbName string, table *Table){
