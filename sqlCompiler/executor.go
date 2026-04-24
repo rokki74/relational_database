@@ -103,10 +103,7 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 			}
 
 			var results [][]string
-			tablePath, okay := db.GetTablePath(table.TableName)
-			if !okay{
-				return nil, false
-			}
+			tablePath := db.GetTablePath(table.TableName)
 			for pageID := uint32(0); pageID <= table.LastPageId; pageID++ {
 					page, present := db.BufferPool.FetchPage(pageID, tablePath)
 					if !present{
@@ -139,17 +136,38 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 func (e *Executor) execInsert(stmt *InsertStmt) {
 	  log.Printf("Insert stmt hit..")
 		db := e.CurrentDB
-		 //let's perform a crude test here for the time being and see 
+
+    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
+		log.Printf(db.Dbname)
+		 //a crude test here for the time being and see 
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
 				log.Printf("Critical, the database is really not set or unavailable, yeah")
 				return
 			}
+
+    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
+		log.Printf(db.Dbname)
+
 			table, exists := db.GetTable(stmt.TBLName)
 			if !exists{
-				log.Printf("Table does not exist")
-				return
+				log.Printf("Table does not exist, trying without")
 			}
-    
+
+    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
+		log.Printf(db.Dbname)
+
+    tblPath := db.GetTablePath(table.TableName)
+    log.Printf("tblPath at executor.go line 162: %v", tblPath)
+		if tblPath == ""{
+			log.Printf("risky, the tbltblPath is empty..")
+		}
+		log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
+		log.Printf(db.Dbname)
+		fsmPath, _ := db.GetFsmPath(table.TableName)
+
+    log.Printf("Scouting to see whether the db struct has died/idempotent..\n dbName is: ")
+		log.Printf(db.Dbname)
+
     log.Printf("Table found, proceeding with the insert")
     colTypes := make([]myDatabase.ColumnType, len(stmt.Columns))
 		colNames := make([]string, len(stmt.Columns))
@@ -172,11 +190,12 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
     // 2. Encode tupleBytes/serializedBs 
 		tupleBytes := table.SerializeColumnValues(values, colTypes)
 
+    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
+		log.Printf(db.Dbname)
+
     // 3. Find page with space (FSM)
-		tblPath, _ := db.GetTablePath(table.TableName)
-		fsmPath, _ := db.GetObjectPath(table.TableName, myDatabase.FSMTYPE)
 		log.Printf("looking to find a fitting page..")
-    pageID, fsmPage, availed := db.BufferPool.FittingPage(&table, uint16(len(tupleBytes)))
+    pageID, fsmPage, availed := db.BufferPool.FittingPage(table.TableName, fsmPath, uint16(len(tupleBytes)))
 		if availed{
 			  log.Printf("A fitting page was found, using it..")
 				page, got := db.BufferPool.FetchPage(pageID, tblPath)
@@ -198,6 +217,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 		}
    
 		log.Printf("Fitting page not found, settling for the last page instead..")
+		log.Printf("the last pageId that shall be used: %v", table.LastPageId)
+		log.Printf("at executor.go line 221")
 		page, found := db.BufferPool.FetchPage(table.LastPageId, tblPath)
 		if !found{
 			
@@ -222,6 +243,9 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 			e.CurrentDB.InsertIntoIndexes(&table, *rowId, tupleBytes)
 			
 			log.Printf("Insert was a success!")
+
+			log.Printf("flushing for now..")
+			db.BufferPool.FlushTable(tblPath, &table)
 			return
 		}
 
@@ -232,6 +256,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
     e.CurrentDB.InsertIntoIndexes(&table, *rowId, tupleBytes)
 
 		log.Printf("Insert was a success!")
+			log.Printf("flushing for now..")
+			db.BufferPool.FlushTable(tblPath, &table)
 }
 
 func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
@@ -343,10 +369,7 @@ func (e *Executor) execDelete(stmt *DeleteStmt){
 	}
 
 	for pageId := uint32(0); pageId <= table.LastPageId; pageId++{
-		tablePath, ok := db.GetTablePath(table.TableName)
-		if !ok{
-			break
-		}
+		tablePath := db.GetTablePath(table.TableName)
 
 		page, exists := db.BufferPool.FetchPage(pageId, tablePath) 
 		if !exists{
@@ -391,11 +414,7 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 			return
 		}
 
-    tablePath, ok := db.GetTablePath(table.TableName)
-		if !ok{
-			log.Printf("table doesn't exist!")
-			return
-		}
+    tablePath := db.GetTablePath(table.TableName)
     for pageID := uint32(0); pageID <=table.LastPageId; pageID++ {
         page, exists := db.BufferPool.FetchPage(pageID, tablePath)
 				if !exists{
@@ -448,7 +467,8 @@ func (e *Executor) execUpdate(stmt *UpdateStmt) {
 
                 // insert new tuple
 								var freePage myDatabase.Page
-								pgId, fsmPage, fitting := db.BufferPool.FittingPage(&table, uint16(len(newTupleBytes)))
+								fsmPath,_ := db.GetFsmPath(table.TableName)
+								pgId, fsmPage, fitting := db.BufferPool.FittingPage(table.TableName, fsmPath, uint16(len(newTupleBytes)))
 								if fitting{
 									fPage, exists := db.BufferPool.FetchPage(pgId, tablePath)
 									if !exists{

@@ -26,6 +26,7 @@ type BufferPool struct{
 }
 
 func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
+	log.Printf("bufferpool FetchPage hit..")
 	bufKey := BufferKey{fileName, pageId}
 
 	frame,ok := bf.frames[bufKey]
@@ -43,10 +44,13 @@ func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
 
 		//add it to BufferPool
 		bf.frames[BufferKey{fileName, pageId}] = frm
+	  log.Printf("page fetched and added to bufferpool successfully, got it from pager, page is of id[%v]",pageId)
 		return &page, true
   }
 
 	frame.PinCount +=1
+
+	log.Printf("page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[%v]",pageId)
 	return &frame.FramePage, true
 }
 
@@ -68,6 +72,10 @@ func (bf *BufferPool) SavePage(fileName string, page Page){
 	log.Printf("setting the buffer frame..")
 	bf.frames[bufferKey] = frm
 	log.Printf("save page was a success")
+}
+
+func (bf BufferPool) FlushFsmPage(fsmPath string, fsmPage *Page){
+	bf.Pager.WritePage(fsmPath, *fsmPage)
 }
 
 func (bf *BufferPool) FlushTable(tablePath string, tb *Table){
@@ -129,21 +137,17 @@ func (bf *BufferPool) MarkDirty(fileName string, pageId uint32){
 	log.Printf("pageId[%v] of table[%v] marked dirty..", pageId, fileName)
 }
 
-func (bf *BufferPool) FittingPage(tb *Table, length uint16) (uint32, *Page, bool){
+func (bf *BufferPool) FittingPage(tableName string, fsmPath string, length uint16) (uint32, *Page, bool){
 	log.Printf("FittingPage hit..\n finding fsm path to get free page of atleast size[%v]",length)
-	fsmPath, prsnt := tb.Db.GetFsmPath(tb.TableName)
-	if !prsnt{
-		log.Printf("problem, cannot find fsmPath, returning..")
-		return 0, nil, false
-	}
-	log.Printf("fsmPath found at FittingPage func, path[%v]",fsmPath)
+
+	log.Printf("fsmPath to be used at FittingPage func, path[%v]",fsmPath)
 	log.Printf("Looking at Fsm table records next..")
 	if bf.Fsm.TablesRecorded ==nil{
 		bf.Fsm.TablesRecorded = make(map[string]uint32, 0)
 	}
-	lastFramePageId,ok := bf.Fsm.TablesRecorded[tb.TableName]
+	lastFramePageId,ok := bf.Fsm.TablesRecorded[tableName]
 	if !ok{
-		log.Printf("The fsm records not found for the table %v",tb.TableName)
+		log.Printf("The fsm records not found for the table %v",tableName)
 		return 0, nil, false
 	}
 

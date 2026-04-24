@@ -2,6 +2,7 @@ package myDatabase
 
 import (
 	"encoding/binary"
+	"log"
 	"os"
 	"strings"
 )
@@ -47,7 +48,8 @@ func NewWalManager(path string) *WalManager{
 
 func (wal *WalManager) Log(record *WalRecord) uint64{
 	record.LSN = wal.currentLSN
-
+  log.Printf("logging a record ..") 
+	log.Printf("The received record for logging %v", *record)
 	data := serializeRecord(record)
 	wal.file.Write(data)
 	wal.file.Sync()
@@ -76,7 +78,9 @@ func serializeRecord(rec *WalRecord) []byte{
   recBytes = append(recBytes, byte(rec.ResourceType))
 	tableNameLen := uint8(len(rec.TableName))
 	recBytes = append(recBytes, byte(tableNameLen))
-	copy(recBytes[9:tableNameLen], []byte(rec.TableName))
+	recArrLen := len(recBytes)
+	log.Printf("current length of recBytes in serializing records: %v", recArrLen)
+	copy(recBytes[recArrLen:tableNameLen], []byte(rec.TableName))
 
 	//The rest of offsets can align themselves well for the data after recording tablename
 	recBytes = append(recBytes, byte(rec.PageId))
@@ -84,6 +88,8 @@ func serializeRecord(rec *WalRecord) []byte{
 	recBytes = append(recBytes, byte(rec.DataSize))
 	recBytes = append(recBytes, rec.Data...)
 
+
+	log.Printf("current length of recBytes in serializing records: %v", len(recBytes))
   return recBytes
 }
 
@@ -184,10 +190,7 @@ func (wal *WalManager) Recover(db *Database_Manager, startLSN uint64) {
 
 	for _, rec := range records {
 
-		filename, exists := db.GetTablePath(rec.TableName)
-		if !exists{
-		  continue
-		}
+		filename := db.GetTablePath(rec.TableName)
 
 		if rec.ResourceType == IndexRes{
 		  parts := strings.Split(filename, ".")
@@ -305,10 +308,7 @@ func (wal *WalManager) Flush(db *Database_Manager){
 }
 
 func (wal *WalManager) FlushLog(log WalRecord, db *Database_Manager){
-		fileName, exists := db.GetTablePath(log.TableName)
-		if !exists{
-		  return
-		}
+		fileName := db.GetTablePath(log.TableName)
 		if log.ResourceType == IndexRes{
 		  parts := strings.Split(fileName, ".")
 			fileName = parts[0]+".idx"
@@ -323,10 +323,7 @@ func (wal *WalManager) FlushLog(log WalRecord, db *Database_Manager){
 }
 
 func (wal *WalManager) Undo(log WalRecord, db *Database_Manager){
-		fileName, exists := db.GetTablePath(log.TableName)
-		if !exists{
-		  return
-		}
+		fileName := db.GetTablePath(log.TableName)
 		if log.ResourceType == IndexRes{
 		  parts := strings.Split(fileName, ".")
 			fileName = parts[0]+".idx"

@@ -265,7 +265,8 @@ func (p *Parser) parseSelect() Statement{
 			stmt.Where = expr
 		}
 	}
-
+  
+	log.Printf("The select stmt shall be from TableName:%v and the column: %v",table,columns[0])
 	return stmt
 }
 
@@ -433,7 +434,7 @@ func (p *Parser) parseCreateTable() Statement{
  p.expect(RPAREN)
 
  stmt.Columns = columns
- log.Printf("parseCreateTable finished successfully!")
+ log.Printf("create table was a success!")
  return stmt
 }
 

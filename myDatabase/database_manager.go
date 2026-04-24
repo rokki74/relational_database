@@ -59,39 +59,38 @@ const (
 func (db *Database_Manager) GetObjectPath(objectName string, objType ObjectType) (string, bool){
 	switch objType{ 
 	   case TABLETYPE:
-		    return db.GetTablePath(objectName)
+		    return db.GetTablePath(objectName), true
 		 case INDEXTYPE:
 		    return db.GetIndexPath(objectName)
 		 case FSMTYPE:
 		    return db.GetFsmPath(objectName)
 		 default:
 		    log.Printf("Object type unspecified, fitting it to table")
-				return db.GetTablePath(objectName)
+				return db.GetTablePath(objectName), true
 	}
 }
 
-func (db *Database_Manager) GetTablePath(tableName string) (string, bool){
-  _, exists := db.GetTable(tableName)
+func (db *Database_Manager) GetTablePath(tableName string) string{
+  tb, exists := db.GetTable(tableName)
 	if !exists{
-		return "", false
+		return ""
 	}
 
-  return db.DbPath+"/"+tableName+".tbl", true
+	return  db.DbPath+"/"+tb.TableName+".tbl"
 }
 
+//to remove the unnecessary bool returned
 func (db *Database_Manager) GetFsmPath(tableName string) (string, bool){
-	log.Printf("GetFsmPath hit..\n Getting fsm path for the tablename %v", tableName)
-  _, exists := db.GetTable(tableName)
-	if !exists{
-		log.Printf("didn't find the table in the database[%v]", db.Dbname)
-		return "", false
-	}
-
-
-	log.Printf("so far so good, building the fsmPath string..")
+	log.Printf("Building the fsmPath string..")
+	if db != nil{
 	fsmPath := db.DbPath+"/"+tableName+".fsm"
+
 	log.Printf("returning fsm path[%v]",fsmPath)
-	return fsmPath,true
+	return fsmPath, true
+  }
+
+	log.Printf("the db struct is a nil at the GetFsmPath")
+	return "", false
 }
 
 func (db Database_Manager) SaveTable(tb *Table){
@@ -100,12 +99,23 @@ func (db Database_Manager) SaveTable(tb *Table){
 	log.Printf("db.SaveTable hit, saving into path: %v", tablePath)
 	db.BufferPool.FlushTable(tablePath, tb)
 	db.Catalog.SaveTable(db.Dbname, tb)
+
+	fsmPath := db.DbPath+"/"+tb.TableName+".fsm"
+	log.Printf("creating fsm for the new table..")
+	_, fsmerr := os.Create(fsmPath)
+	if fsmerr != nil{
+		log.Printf("the fsm file won't be created!, Err: %v", fsmerr)
+	}
+  fsmPage := Page{}
+	fsmPage.Init(uint32(0))
+  db.BufferPool.FlushFsmPage(fsmPath, &fsmPage) 
+  log.Printf("fsm for the intended table created and initial page persisted buy pager")
 }
 
 func (db *Database_Manager) DeleteTable(tb *Table){
 	db.Catalog.DeleteTable(db.Dbname, tb)
 
-	tablePath, _ := db.GetTablePath(tb.TableName)
+	tablePath := db.GetTablePath(tb.TableName)
 	db.BufferPool.DeleteTableName(tablePath)
 }
 

@@ -56,7 +56,6 @@ func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, b
 	if exists{
 		log.Printf("Table already exists!")
 		log.Printf("DEBUGGING THE EXISTENT TABLE[%v], tableName: %v, schema: %v", tabl,tabl.TableName, tabl.TableSchema)
-		db.SaveTable(tabl)
 		return *tabl, false
 	}
 
@@ -76,12 +75,18 @@ func (db *Database_Manager) CreateTable(name string, columns []Column) (Table, b
 	}	
 	clgEntry.Tables[name] = &table
 	db.SaveTable(&table)
+	log.Printf("db.SaveTable was a success..")
 
+ 
+
+
+	log.Printf("Table: %v created successfully", table.TableName)
 	return table, false
 }
 
 func (db *Database_Manager) GetTable(name string) (Table, bool){
-	log.Printf("Get table called with args: dbName[%v], tblName:[%v]",db.Dbname, name)
+	log.Printf("getting table %v..\n", name)
+	log.Printf("Get table called with args: dbName[%v]",db.Dbname)
   clgEntry, ok := db.Catalog.CatalogEntry[db.Dbname]
 	if !ok{
 		log.Printf("Can't insert to database not present in the catalog")
@@ -260,11 +265,12 @@ func (tb *Table) Insert(row string, txn *Transaction) {
 	 }
 
 	 row_bytes := tb.SerializeColumnValues(parts, colTypes)
-   pageId, _, ok := tb.Db.BufferPool.FittingPage(tb, uint16(len(row_bytes)))
+	 fsmPath, _ := tb.Db.GetFsmPath(tb.TableName)
+   pageId, _, ok := tb.Db.BufferPool.FittingPage(tb.TableName, fsmPath, uint16(len(row_bytes)))
 	 if !ok{
 		 pageId = tb.LastPageId
 	 }
-   tablepath, _ := tb.Db.GetTablePath(tb.TableName)
+   tablepath := tb.Db.GetTablePath(tb.TableName)
 	 page, _ := tb.Db.BufferPool.FetchPage(pageId, tablepath)
    header := page.Read_header()	
 
@@ -374,11 +380,7 @@ func (tb *Table) CreateIndex(name string, columnNames []string) {
 }
 
 func (db *Database_Manager) MakeIndexes(tb *Table){
-	tablePath, ok := db.GetTablePath(tb.TableName)
-	if !ok{
-		log.Printf("Cannot make indexes for a non existent table!")
-		return
-	}
+	tablePath := db.GetTablePath(tb.TableName)
 	for _, index := range(tb.Indexes){
 		tb.MakeIndexMemTreeFromTableFile(index, tablePath)
 	}
@@ -426,7 +428,7 @@ func (db *Database_Manager) FindByIndex(column string, key []byte, t *Table) []b
 		return nil
 	}
   
-	tablePath, _ := db.GetTablePath(t.TableName)
+	tablePath := db.GetTablePath(t.TableName)
 	page, _ := db.BufferPool.FetchPage(ptr.PageId, tablePath)
 
 	return page.Read_row(int(ptr.SlotId))
