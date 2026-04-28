@@ -244,7 +244,7 @@ func (tree *BPlusTree) writeInternal(pageId uint32, node *InternalNode) {
 		offset += 4
 	}
 
-	tree.BufferPool.SavePage(tree.TreePath, *page)
+	tree.BufferPool.SavePage(tree.TreePath, page)
 }
 
 func (tree *BPlusTree) writeLeaf(pageId uint32, leaf *LeafNode) {
@@ -282,7 +282,7 @@ func (tree *BPlusTree) writeLeaf(pageId uint32, leaf *LeafNode) {
 		offset += 2
 	}
 
-	tree.BufferPool.SavePage(tree.TreePath, *page)
+	tree.BufferPool.SavePage(tree.TreePath, page)
 }
 
 func (tree *BPlusTree) insertIntoLeaf(leaf *LeafNode, pageId uint32, key []byte, ptr RowId) {

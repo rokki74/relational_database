@@ -127,7 +127,7 @@ func (tb *Table) writeFsm(pageId uint32, freeBytes uint16){
 	header.FreeSpaceOffset += 2
 	page.Write_header(&header)
 
-	tb.Db.BufferPool.SavePage(fsmPath, *page)
+	tb.Db.BufferPool.SavePage(fsmPath, page)
 }
 
 func (tb *Table)  SaveTable(){
@@ -191,7 +191,7 @@ func (tl *Table) close_table(){
 }
 
 func (tl *Table) SerializeColumnValues(parts []string, colTypes []ColumnType) []byte{
-	buf := make([]byte, 4)
+	buf := make([]byte, 0)
 
 	for pos, val := range parts{
     colType := colTypes[pos]
@@ -200,17 +200,19 @@ func (tl *Table) SerializeColumnValues(parts []string, colTypes []ColumnType) []
 			if strings.ToLower(val) == "true"{
 				buf = append(buf, byte(1))//i shall deduce size from TableSchema later on deserialize
 			}else{
-				buf = append(buf, byte(1))
+				buf = append(buf, byte(0))
 			}
 		case INT:
 			v, _ := strconv.Atoi(val)
-			tmp := make([]byte, 0)
-			binary.LittleEndian.PutUint32(tmp, uint32(v))
-			buf = append(buf, tmp...)
+			var tmp [4]byte
+			log.Printf("Found an int value: %v", uint32(v))
+			binary.LittleEndian.PutUint32(tmp[:], uint32(v))
+			log.Printf("appendign to buf..")
+			buf = append(buf, tmp[:]...)
 
 		case STRING:
 			strBytes := []byte(val)
-			col_len := make([]byte, 2)
+			col_len := make([]byte, 0, 2)
 			binary.LittleEndian.PutUint16(col_len, uint16(len(strBytes)))
 			buf = append(buf, col_len...)
 			buf = append(buf, strBytes...)

@@ -6,7 +6,7 @@ import(
 )
 
 type Frame struct{
-	FramePage Page
+	FramePage *Page
 	PinCount uint32
 	Dirty bool
 }
@@ -29,8 +29,17 @@ func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
 	log.Printf("bufferpool FetchPage hit..")
 	bufKey := BufferKey{fileName, pageId}
 
+	framesLen := len(bf.frames)
+	if bf.frames == nil && framesLen <1{
+		log.Printf("buffer frames found to be uninitialized")
+		bf.frames = make(map[BufferKey]Frame, 0)
+
+		log.Printf("buffer frames initialized successfully")
+	}
+
 	frame,ok := bf.frames[bufKey]
 	if !ok{
+		log.Printf("page not in buffer frames..")
 		page,found  := bf.Pager.GetPage(fileName, pageId)
 		if !found{
 			return nil, false
@@ -45,18 +54,25 @@ func (bf *BufferPool) FetchPage(pageId uint32, fileName string) (*Page, bool){
 		//add it to BufferPool
 		bf.frames[BufferKey{fileName, pageId}] = frm
 	  log.Printf("page fetched and added to bufferpool successfully, got it from pager, page is of id[%v]",pageId)
-		return &page, true
+		return page, true
   }
 
 	frame.PinCount +=1
 
 	log.Printf("page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[%v]",pageId)
-	return &frame.FramePage, true
+	return frame.FramePage, true
 }
 
-func (bf *BufferPool) SavePage(fileName string, page Page){
-	log.Printf("save page hit..")
+func (bf *BufferPool) SavePage(fileName string, page *Page){
+	
 	header := page.Read_header()
+	log.Printf("DEBBUGGING THE PAGE DATA ROWS..")
+	for s :=0;s<int(header.RowCount);s++{
+		datum := page.Read_row(s)
+		log.Printf("data inside row %v :DATUM[%v]", s,datum)
+		
+		log.Printf("string repr %v :DATUM[%v]", s, string(datum))
+	} 
 	bufferKey := BufferKey{fileName, header.PageId}
   
 	frm := Frame{
@@ -67,7 +83,7 @@ func (bf *BufferPool) SavePage(fileName string, page Page){
   log.Printf("bufferKey: %v", bufferKey)
 	if bf.frames ==nil{
 		log.Printf("the buffer frames not initialized yet, initializing the map..")
-		bf.frames = make(map[BufferKey]Frame)
+		bf.frames = make(map[BufferKey]Frame, 0)
 	}
 	log.Printf("setting the buffer frame..")
 	bf.frames[bufferKey] = frm
@@ -75,28 +91,32 @@ func (bf *BufferPool) SavePage(fileName string, page Page){
 }
 
 func (bf BufferPool) FlushFsmPage(fsmPath string, fsmPage *Page){
-	bf.Pager.WritePage(fsmPath, *fsmPage)
+	bf.Pager.WritePage(fsmPath, fsmPage)
 }
 
-func (bf *BufferPool) FlushTable(tablePath string, tb *Table){
-	log.Printf("flushing the whole table to disk..")
-	if tb.LastPageId <1{
-		log.Printf("Flush page found less than one pages for the table, flushing only one..")
-			log.Printf("No in-mem or disk page found for the table: %v, so saving and persisting it's first", tb.TableName)
-			page := Page{}
-			page.Init(0)
-			bf.Pager.WritePage(tablePath, page)
-			bf.SavePage(tablePath, page)
-			return
-	  }
+func (bf *BufferPool) FlushNewTable(tablePath string, tb *Table){
+	log.Printf("flushing this new table to disk..")
+	page := Page{}
+	page.Init(0)
 
-	log.Printf("Flush page found more pages flushing all..")
-	for pgId :=uint32(0); pgId <=tb.LastPageId;pgId++{
-		 page,ok := bf.FetchPage(pgId, tablePath)
-		 if ok{
-		    bf.Pager.WritePage(tablePath, *page)
-		 }
-	 }
+	bf.FlushPage(tablePath, &page)
+}
+
+
+func (bf *BufferPool) FlushPage(tablePath string, page *Page){
+	  header := page.Read_header()
+	  log.Printf("Flushing page[%v] to disk..", header.PageId)
+		
+
+		log.Printf("DEBBUGGING THE PAGE DATA ROWS..")
+		for s :=0;s<int(header.RowCount);s++{
+			datum := page.Read_row(s)
+			log.Printf("data inside row %v :DATUM[%v]\n", s,datum)
+			
+			log.Printf("string repr %v :DATUM[%v]\n", s,datum)
+		} 
+
+    bf.Pager.WritePage(tablePath, page)
 }
 
 func (bf *BufferPool) evict_pages(){
@@ -188,7 +208,7 @@ func (bf *BufferPool) FlushAll(){
 					 val.Dirty = false
 				 }
       }
-
+ 
 			delete(bf.frames, key)
   }
 

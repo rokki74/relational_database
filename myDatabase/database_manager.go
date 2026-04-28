@@ -97,7 +97,7 @@ func (db Database_Manager) SaveTable(tb *Table){
 
 	tablePath := db.DbPath+"/"+tb.TableName+".tbl" 
 	log.Printf("db.SaveTable hit, saving into path: %v", tablePath)
-	db.BufferPool.FlushTable(tablePath, tb)
+	db.BufferPool.FlushNewTable(tablePath, tb)
 	db.Catalog.SaveTable(db.Dbname, tb)
 
 	fsmPath := db.DbPath+"/"+tb.TableName+".fsm"

@@ -469,13 +469,13 @@ func SaveSysPage(clg *CatalogManager,bf *BufferPool, tableName string, page *Pag
 		switch tableName{
 	   case "DATABASES":
 			 flpath := clg.SysDBDir+ sys_databases_m
-			 bf.SavePage(flpath, *page)
+			 bf.SavePage(flpath, page)
 		 case "TABLES":
        flpath := clg.SysDBDir+ sys_tables_m
-			 bf.SavePage(flpath, *page)
+			 bf.SavePage(flpath, page)
 		 case "INDEXES":
 			 flpath := clg.SysDBDir+ sys_indexes_m
-			 bf.SavePage(flpath, *page)
+			 bf.SavePage(flpath, page)
 		 default:
 			 log.Printf("The table provided is not of the sys directory")
 	 }

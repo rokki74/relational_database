@@ -111,15 +111,22 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 						continue
 					}
 					header := page.Read_header()
+					log.Printf("Page gotten successfully, getting it's rows")
 					for s := 0; s < int(header.RowCount); s++ {
 							if !page.SlotDead(s) {
 									continue
 							}
-
+              log.Printf("Reading the slot index[%v] of pageId[%v]", s, header.PageId)
 							tupleBs := page.Read_row(s)
+							log.Printf("The tupleBs read: %v", tupleBs)
 							//Build tuple
+							log.Printf("length of row read: %v", len(tupleBs))
 							tuple := e.buildTup(table.TableSchema, tupleBs)
+
+							log.Printf("The tuple after e.buildTup func: %v", tuple)
 							tp := rowByteIntoTuple(table.TableSchema, tupleBs)
+
+							log.Printf("The tuple after rowByteIntoTuple func: %v", tp)
 							if stmt.Where != nil {
 									if !e.evalExpr(stmt.Where, *tp) {
 											continue
@@ -127,9 +134,15 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 							}
 
 							row := e.project(stmt.Columns, tuple)
+
+							log.Printf("The row after executor.Project([]Column, tuple): %v", row)
 							results = append(results, row)
 					}
 			}
+
+			log.Printf("The final len of results before returning the select: %v", len(results))
+
+			log.Printf("The final results before returning the select: %v", results)
 			return results, true
 }
 
@@ -137,40 +150,30 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 	  log.Printf("Insert stmt hit..")
 		db := e.CurrentDB
 
-    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
-		log.Printf(db.Dbname)
 		 //a crude test here for the time being and see 
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
 				log.Printf("Critical, the database is really not set or unavailable, yeah")
 				return
 			}
 
-    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
-		log.Printf(db.Dbname)
 
 			table, exists := db.GetTable(stmt.TBLName)
 			if !exists{
 				log.Printf("Table does not exist, trying without")
 			}
 
-    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
-		log.Printf(db.Dbname)
 
     tblPath := db.GetTablePath(table.TableName)
     log.Printf("tblPath at executor.go line 162: %v", tblPath)
 		if tblPath == ""{
 			log.Printf("risky, the tbltblPath is empty..")
 		}
-		log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
-		log.Printf(db.Dbname)
 		fsmPath, _ := db.GetFsmPath(table.TableName)
 
-    log.Printf("Scouting to see whether the db struct has died/idempotent..\n dbName is: ")
-		log.Printf(db.Dbname)
 
     log.Printf("Table found, proceeding with the insert")
-    colTypes := make([]myDatabase.ColumnType, len(stmt.Columns))
-		colNames := make([]string, len(stmt.Columns))
+    colTypes := make([]myDatabase.ColumnType, 0)
+		colNames := make([]string, 0)
     for _, colName := range stmt.Columns{
 			colType, _, prsnt := table.FindColumnTypeAndPos(colName)
 			if !prsnt{
@@ -189,9 +192,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
     log.Printf("Done evaluating")
     // 2. Encode tupleBytes/serializedBs 
 		tupleBytes := table.SerializeColumnValues(values, colTypes)
-
-    log.Printf("Scouting at executor to see whether the db struct has died/idempotent..\n dbName is: ")
-		log.Printf(db.Dbname)
+    log.Printf("values serialized: %v\n", values)
+    log.Printf("tupleBytes to write: %v\n", tupleBytes)
 
     // 3. Find page with space (FSM)
 		log.Printf("looking to find a fitting page..")
@@ -202,7 +204,9 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 				if got{
 					rowId, _ := page.Insert_row(tupleBytes)
 					db.BufferPool.Fsm.UpdateFSM(fsmPage, pageID, uint16(len(tupleBytes)))
-					db.BufferPool.SavePage(fsmPath, *fsmPage)
+					db.BufferPool.SavePage(fsmPath, fsmPage)
+
+					db.BufferPool.FlushPage(tblPath, page)
 
 					// 6. WAL logging
 					db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
@@ -234,8 +238,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 				log.Printf("Totally impossible to make an insert, this was an attempt on newly allocated page!")
 				return
 			}
-			db.BufferPool.SavePage(tblPath, *pg)
-
+			db.BufferPool.SavePage(tblPath, pg)
+      
 			// 6. WAL logging
 			db.WAL.LogInsert(table.TableName, myDatabase.ResourceType(TABLEResource), *rowId, tupleBytes)
 
@@ -245,7 +249,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 			log.Printf("Insert was a success!")
 
 			log.Printf("flushing for now..")
-			db.BufferPool.FlushTable(tblPath, &table)
+			
+			db.BufferPool.FlushPage(tblPath, page)
 			return
 		}
 
@@ -257,7 +262,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 
 		log.Printf("Insert was a success!")
 			log.Printf("flushing for now..")
-			db.BufferPool.FlushTable(tblPath, &table)
+
+			db.BufferPool.FlushPage(tblPath, page)
 }
 
 func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
@@ -620,7 +626,7 @@ func (tp *Tuple) turnToBytes(schema myDatabase.Schema) []byte {
 
 		case myDatabase.INT:
 			i, _ := strconv.Atoi(val.Value)
-			buf := make([]byte, 4)
+			buf := make([]byte, 0, 4)
 			binary.LittleEndian.PutUint32(buf, uint32(i))
 			result = append(result, buf...)
 

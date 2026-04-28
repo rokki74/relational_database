@@ -78,10 +78,9 @@ func serializeRecord(rec *WalRecord) []byte{
   recBytes = append(recBytes, byte(rec.ResourceType))
 	tableNameLen := uint8(len(rec.TableName))
 	recBytes = append(recBytes, byte(tableNameLen))
-	recArrLen := len(recBytes)
-	log.Printf("current length of recBytes in serializing records: %v", recArrLen)
-	copy(recBytes[recArrLen:tableNameLen], []byte(rec.TableName))
 
+	buf := []byte(rec.TableName)
+  recBytes = append(recBytes, buf...)
 	//The rest of offsets can align themselves well for the data after recording tablename
 	recBytes = append(recBytes, byte(rec.PageId))
 	recBytes = append(recBytes, rec.Operation)
