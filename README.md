@@ -16,7 +16,7 @@ Then the next time on fetching we fetch this whole array and then read the first
 * Then we also read the actual data in similar manner using slices also as it is an array but we need 
 to read only upto the offset that is equal to dataLength and also we need to start one byte ahead as that data in that index belongs to another person "dataLength" variable. so simply wewould read it back as binary.LittleEndian.PutUint32(byteData[1:dataLength]) or you can use copy still if you wish.
 
-* Now i can't really explain everything that will be the work of documentation[link-docs]. This was just a part for those who are usually as curious as me so it was just a slight taste into how the implementations were done.
+* Now i can't really explain everything that will be the work of documentation[/docs]. This was just a part for those who are usually as curious as me so it was just a slight taste into how the implementations were done.
 * But really we can assume you've learnt the core of databases, as you have seen i did not use an operating system capabilities as the libraries for programming languages usually provide and just trusted a f.Write("then pass in my data just like that"). No this is exactly one contradicting part operating systems need to ensure the data integrity themselves and also ensure a user can fetch exactly what he saved back by reading that part directly accessing it also enure it is never lost incase of crash.
 ** You must have realised it it's too deeply nested knowledge that not even i fully understand yet so i just recommend you read books on databases and use online resources for you understanding.
 

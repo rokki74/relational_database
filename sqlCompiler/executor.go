@@ -187,12 +187,15 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
     values := make([]string, 0)
 		log.Printf("Evaluating the values for insert..")
 		for _, val := range stmt.Values{
-			values = append(values, e.evalValue(val, Tuple{}))
+      value := e.evalValue(val, Tuple{})
+			values = append(values, value)
 		}
+
     log.Printf("Done evaluating")
     // 2. Encode tupleBytes/serializedBs 
 		tupleBytes := table.SerializeColumnValues(values, colTypes)
     log.Printf("values serialized: %v\n", values)
+		log.Printf("colTypes serialized: %v\n", colTypes)
     log.Printf("tupleBytes to write: %v\n", tupleBytes)
 
     // 3. Find page with space (FSM)

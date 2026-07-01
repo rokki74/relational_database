@@ -68,7 +68,7 @@ func (*CreateIDXStmt) stmtNode(){}
 func (*CreateTBLStmt) stmtNode(){}
 func (*UseStmt) stmtNode(){}
 
-type Expr interface{}
+type Expr any
 
 type Identifier struct{
 	Name string
@@ -214,7 +214,7 @@ func (p *Parser) parsePrimary() (Expr, bool) {
         return expr, true
 
     default:
-        log.Printf("unexpected token in expression: " + tok.Value)
+        log.Printf("unexpected token in expression: %v", tok.Value)
 				return nil, false
     }
 }
@@ -222,7 +222,6 @@ func (p *Parser) parsePrimary() (Expr, bool) {
 func (p *Parser) ParseStatement() Statement{
 	switch p.curToken.Type{
 	case USE:
-		log.Printf("found a use statement, ready to handle it")
 		return p.ParseUse()
 	case SELECT:
 		return p.parseSelect()

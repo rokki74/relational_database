@@ -1,0 +1,6 @@
+#ERROR NO. 1 
+So i guess i need to now check expr.evalValue() and then the 
+table.SerializeColumnValue(values, colTypes).
+
+//evalValue(expr, tuple)
+

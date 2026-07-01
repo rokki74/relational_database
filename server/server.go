@@ -57,6 +57,7 @@ func (s *Server) handleClient(conn net.Conn) {
   executor := &sqlCompiler.Executor{
 		Syst: s.RealDB,
 	}
+
 	for {
 		// Prompt
 		conn.Write([]byte("db > "))

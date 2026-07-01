@@ -1,0 +1,2 @@
+SELECT * FROM students WHERE age < 18 AND (class='three' OR 
+                        class='four');

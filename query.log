@@ -1,0 +1,21 @@
+db > create database db1; use db1;
+OK
+db > OK
+db > create table tb1(days integer, total integer);
+OK
+db > insert into tb1(days, total) values(23, 54);
+OK
+db > insert into tb1(days, total) values(200, 7);
+OK
+db > insert into tb1(days, total) values(34, 4);
+OK
+db > select days, total from tb1;
+OK
+db > insert into tb1(days) values(2345);
+OK
+db > insert into tb1(total) values(45783492);
+OK
+db > select days, total from tb1;
+OK
+db > select * from tb1;
+OK

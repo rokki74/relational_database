@@ -89,7 +89,7 @@ func (db *Database_Manager) GetTable(name string) (Table, bool){
 	log.Printf("Get table called with args: dbName[%v]",db.Dbname)
   clgEntry, ok := db.Catalog.CatalogEntry[db.Dbname]
 	if !ok{
-		log.Printf("Can't insert to database not present in the catalog")
+		log.Printf("Can't fetch table from database not present in the catalog")
 	}
 	_, exists := clgEntry.Tables[name]
 	if !exists{
@@ -197,12 +197,14 @@ func (tl *Table) SerializeColumnValues(parts []string, colTypes []ColumnType) []
     colType := colTypes[pos]
 		switch colType{
 		case BOOLEAN:
+			log.Println("Found a BOOLEAN value at SerializeColumnValues")
 			if strings.ToLower(val) == "true"{
 				buf = append(buf, byte(1))//i shall deduce size from TableSchema later on deserialize
 			}else{
 				buf = append(buf, byte(0))
 			}
 		case INT:
+			log.Println("Found INT value at SerializeColumnValues")
 			v, _ := strconv.Atoi(val)
 			var tmp [4]byte
 			log.Printf("Found an int value: %v", uint32(v))
@@ -211,6 +213,7 @@ func (tl *Table) SerializeColumnValues(parts []string, colTypes []ColumnType) []
 			buf = append(buf, tmp[:]...)
 
 		case STRING:
+			log.Println("Fount STRING value at SerializeColumnValues")
 			strBytes := []byte(val)
 			col_len := make([]byte, 0, 2)
 			binary.LittleEndian.PutUint16(col_len, uint16(len(strBytes)))
