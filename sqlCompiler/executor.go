@@ -147,7 +147,6 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 }
 
 func (e *Executor) execInsert(stmt *InsertStmt) {
-	  log.Printf("Insert stmt hit..")
 		db := e.CurrentDB
 
 		 //a crude test here for the time being and see 
@@ -164,14 +163,11 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 
 
     tblPath := db.GetTablePath(table.TableName)
-    log.Printf("tblPath at executor.go line 162: %v", tblPath)
 		if tblPath == ""{
 			log.Printf("risky, the tbltblPath is empty..")
 		}
 		fsmPath, _ := db.GetFsmPath(table.TableName)
 
-
-    log.Printf("Table found, proceeding with the insert")
     colTypes := make([]myDatabase.ColumnType, 0)
 		colNames := make([]string, 0)
     for _, colName := range stmt.Columns{
@@ -179,6 +175,8 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 			if !prsnt{
 				continue
 			}
+
+			log.Printf("THE FOUND COLTYPE FOR COLNAME(%v) WAS %v", colName, colType);
 			colTypes = append(colTypes, colType)
 			colNames = append(colNames, colName)
 		} 

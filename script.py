@@ -28,7 +28,7 @@ def hex_dump_page(tablePath: str, bytes_to_read=128):
 
 
 def main():
-    tablePath = "/home/nines/Desktop/gon/TestDB/s7/tb.tbl"
+    tablePath = "/home/nines/Desktop/gon/real_dbms/REALDB/db1/tb1.tbl"
     print("hitting check page contents")
     check_page_contents(tablePath)
     print("hex dump")

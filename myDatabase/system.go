@@ -4,7 +4,7 @@ import (
 	"log"
 )
 
-const sysPath = "/home/nines/Desktop/gon/TestDB"
+const sysPath = "/home/nines/Desktop/gon/real_dbms/REALDB"
 
 type DBSystem struct{
 	Catalog *CatalogManager

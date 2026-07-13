@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 	"strconv"
+	"fmt"
 )
 
 //A change in tables logic, you must always GetTable first so as to use it
@@ -198,20 +199,26 @@ func (tl *Table) SerializeColumnValues(parts []string, colTypes []ColumnType) []
 		switch colType{
 		case BOOLEAN:
 			log.Println("Found a BOOLEAN value at SerializeColumnValues")
+			
 			if strings.ToLower(val) == "true"{
 				buf = append(buf, byte(1))//i shall deduce size from TableSchema later on deserialize
+
+			fmt.Printf("The buf bytes: %v", buf)
 			}else{
 				buf = append(buf, byte(0))
+				
+			fmt.Printf("The buf bytes: %v", buf)
 			}
 		case INT:
 			log.Println("Found INT value at SerializeColumnValues")
 			v, _ := strconv.Atoi(val)
-			var tmp [4]byte
+			tmp := make([]byte, 4)
 			log.Printf("Found an int value: %v", uint32(v))
 			binary.LittleEndian.PutUint32(tmp[:], uint32(v))
 			log.Printf("appendign to buf..")
-			buf = append(buf, tmp[:]...)
-
+			buf = append(buf, tmp...)
+     
+			fmt.Printf("The buf bytes: %v", buf)
 		case STRING:
 			log.Println("Fount STRING value at SerializeColumnValues")
 			strBytes := []byte(val)
@@ -330,6 +337,7 @@ func (tb *Table) FindColumnTypeAndPos(col string) (ColumnType, uint8, bool){
 	columns := tb.TableSchema.Columns
 	for i:=0; i<len(columns); i++{
 		if columns[i].ColumnName == col{
+			log.Printf("Found matching col in the tbl schema for the column")
 			return columns[i].ColumnType, uint8(i), true
 		}
 	}
