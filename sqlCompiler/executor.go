@@ -1,11 +1,12 @@
 package sqlCompiler
 
 import (
+	"encoding/binary"
 	"log"
+	"maps"
 	"real_dbms/myDatabase"
 	"strconv"
 	"strings"
-	"encoding/binary"
 )
 
 var TABLEResource uint8 = 0 
@@ -74,7 +75,6 @@ func (e *Executor) Execute(stmt Statement) [][]string {
 //I highly suspect this to also be errenous just don't know where exactly so i'm trying to look at it
 //let's run it again see what happens
 func (e *Executor) execUseStmt(stmt *UseStmt){
-  log.Printf("executing the use statement, trying to get the db from system catalog")
 	dbMngr, ok := e.Syst.GetDatabase(stmt.DBName)
 	if !ok{
 		log.Printf("Database unavailable for the executor to use in its operation!")
@@ -82,10 +82,10 @@ func (e *Executor) execUseStmt(stmt *UseStmt){
 	}
 
 	e.CurrentDB = dbMngr
-
 }
 
 func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
+	log.Printf("Carrying out select on table: %v, for columns: %v", stmt.TBLName, stmt.Columns)
 	 //I think checking this way might be the problem so how do i do this? can't directly check if it is a nil??
 	 //Okay let me print the e.CurrentDB and really see
 			db := e.CurrentDB
@@ -117,17 +117,15 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 							//Build tuple
 							tuple := e.buildTup(table.TableSchema, tupleBs)
 
-							log.Printf("The tuple after e.buildTup func: %v", tuple)
-
 							if stmt.Where != nil {
 									if !e.evalExpr(stmt.Where, tuple) {
 											continue
 									}
 							}
 
-							row := e.project(stmt.Columns, tuple)
+							row := e.project(tuple)
 
-							log.Printf("The row after executor.Project([]Column, tuple): %v", row)
+							log.Printf("The row after executor.Project(takes in a tuple): %v", row)
 							results = append(results, row)
 					}
 			}
@@ -154,7 +152,7 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 
     tblPath := db.GetTablePath(table.TableName)
 		if tblPath == ""{
-			log.Printf("risky, the tbltblPath is empty..")
+			log.Printf("risky, the tblPath is empty..")
 		}
 		fsmPath, _ := db.GetFsmPath(table.TableName)
 
@@ -198,7 +196,6 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 					// 7. Update indexes
 					//e.CurrentDB.UpdateIndexes(&table, *rowId, colNames)
           db.InsertIntoIndexes(&table, *rowId, tupleBytes)
-					log.Printf("Insert was a success!")
 				}
 
 				log.Printf("Using fsm page was unsuccessful, switching..")
@@ -206,7 +203,6 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
    
 		log.Printf("Fitting page not found, settling for the last page instead..")
 		log.Printf("the last pageId that shall be used: %v", table.LastPageId)
-		log.Printf("at executor.go line 221")
 		page, found := db.BufferPool.FetchPage(table.LastPageId, tblPath)
 		if !found{
 			
@@ -230,10 +226,6 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 			// 7. Update indexes
 			e.CurrentDB.InsertIntoIndexes(&table, *rowId, tupleBytes)
 			
-			log.Printf("Insert was a success!")
-
-			log.Printf("flushing for now..")
-			
 			db.BufferPool.FlushPage(tblPath, page)
 			return
 		}
@@ -243,9 +235,6 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 
     // 7. Update indexes
     e.CurrentDB.InsertIntoIndexes(&table, *rowId, tupleBytes)
-
-		log.Printf("Insert was a success!")
-			log.Printf("flushing for now..")
 
 			db.BufferPool.FlushPage(tblPath, page)
 }
@@ -258,7 +247,7 @@ func (e *Executor) evalExpr(expr Expr, tuple Tuple) bool {
         left := e.evalValue(ex.Left, tuple)
         right := e.evalValue(ex.Right, tuple)
 
-				log.Printf("Just for the fun of it let me visualize how the evalExpr output looks like, here it is:\n %v\n", e.evalExpr(expr, tuple))
+				log.Printf("Visualizing how the evalExpr output looks like, here it is:\n %v\n", e.evalExpr(expr, tuple))
         switch ex.Op {
 
         case EQ:
@@ -319,20 +308,29 @@ func (e *Executor) evalValue(expr Expr, tuple Tuple) string {
 }
 
 
-func (e *Executor) project(columns []string, tuple Tuple) []string {
-
+func (e *Executor) project(tuple Tuple) []string {
     var row []string
+    
+		for colName,value := range tuple.Tup{
+			log.Printf("Found a value: %v For colName: %v", value,colName)
+			switch value.Type{
+			   case 0: log.Printf("So it is a bool")
+			           if value.Value == 0{
+									 log.Printf("Shld have been a false then making it so.")
+									 value.Value = "false"
+								 }else{
+									 log.Printf("SHould have been a true, making it so.")
+									 value.Value = "true"
+								 } 
+					case 1: log.Printf("So it is a int")
+					       log.Printf("Turning the string value.Value into int")
 
-    for _, col := range columns {
-			  log.Printf("Projecting colName[%v]", col)
-			  tupData, ok := tuple.Get(col)
-				if !ok{
-					continue
-				}
-				log.Printf("Tupdata value: tupData.Value[%v]", tupData.Value)
-				log.Printf("Row is currently: %v",row)
-        row = append(row, tupData.Value)
-    }
+					case 2: 
+					        log.Printf("So it is a string. \n TODO later implement logic for string")
+					default: log.Printf("So it is none of the matching cases then.")
+			}
+			row = append(row, value.Value)
+		}
 
     return row
 }
@@ -635,9 +633,11 @@ func (e *Executor) applyUpdate(stmt *UpdateStmt, tuple Tuple) Tuple {
 	}
 
 	// 1. Copy old values
-	for col, data := range tuple.Tup {
+	/*for col, data := range tuple.Tup {
 		newTuple.Tup[col] = data
-	}
+	} */
+	maps.Copy(newTuple.Tup, tuple.Tup)
+
 
 	// 2. Apply updates
 	for col, expr := range stmt.Set {
@@ -665,16 +665,12 @@ func (e *Executor) execCreateDB(stmt *CreateDBStmt){
 }
 
 func (e *Executor) execCreateTbl(stmt *CreateTBLStmt){
-	log.Printf("execCreateTbl hit. Caution, the session might be nil..")
-
-	log.Printf("checking whether the e.CurrentDB is set: CurrentDB[%v]", e.CurrentDB)
   db := e.CurrentDB
 		 //let's perform a crude test here for the time being and see 
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
 				log.Printf("Critical, the database is really not set or unavailable, yeah")
 				return
 			}
-	log.Printf("The db does exist and now going to create the table!")
   db.CreateTable(stmt.TBLName, stmt.Columns)
 }
 

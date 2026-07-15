@@ -1,0 +1,298 @@
+2026/07/15 06:59:31 SYSTEM STARTING..
+2026/07/15 06:59:31 The catalog init was successful, ..yet to load, have a look: &{map[] /home/nines/Desktop/gon/real_dbms/REALDB/sys}
+2026/07/15 06:59:31 NewCatalog done!
+2026/07/15 06:59:31 ready to scan the sys_databases_m file
+2026/07/15 06:59:31 File is empty. Skipping read loop.
+2026/07/15 06:59:31 Started successfully!
+2026/07/15 06:59:31 called start server the 1 time
+DB Server running on port :5439
+Client connected: 127.0.0.1:58728
+2026/07/15 07:00:19 parse create was hit, expecting a CREATE keyword now!
+2026/07/15 07:00:19 done expecting CREATE keyword, looking at the identType, it is a: DATABASE
+2026/07/15 07:00:19 expecting an IDENT from now!
+2026/07/15 07:00:19 The database created successfully, updating it into the catalog
+2026/07/15 07:00:19 Add database catalog hit, in a bid to add the dbName into in-mem catalog
+2026/07/15 07:00:19 Db added to the catalog successfully!
+2026/07/15 07:00:19 The system knows the database[db2] exists
+2026/07/15 07:00:19 Adding the db[db2] to sessions as it didn't exist
+2026/07/15 07:00:19 initializing then later adding database into session..
+2026/07/15 07:00:19 New fsm Manager successfully initialized
+2026/07/15 07:00:19 database successfully initialized!
+2026/07/15 07:00:19 parse create was hit, expecting a CREATE keyword now!
+2026/07/15 07:00:19 done expecting CREATE keyword, looking at the identType, it is a: TABLE
+2026/07/15 07:00:19 expecting an IDENT from now!
+2026/07/15 07:00:19 parse create table hit, expecting a TABLE keyword as an IDENT now!
+2026/07/15 07:00:19 Upto this point we got a tableName from the statement, it is: tb2
+2026/07/15 07:00:19 Expecting the table name so next we can expect an LPAREN
+2026/07/15 07:00:19 a LPAREN is already expected, moving into deserializing the columns now
+2026/07/15 07:00:19 the LPAREN id no is: 11
+2026/07/15 07:00:19 The net put into the columns river caught a fish column called: makao
+2026/07/15 07:00:19 The anticipated column type is: INT
+2026/07/15 07:00:19 The int type case
+2026/07/15 07:00:19 Expecting the column type
+2026/07/15 07:00:19 ColumnType expected, now a comma
+2026/07/15 07:00:19 continuing with the column loop..
+2026/07/15 07:00:19 The net put into the columns river caught a fish column called: ako
+2026/07/15 07:00:19 The anticipated column type is: BOOLEAN
+2026/07/15 07:00:19 Expecting the column type
+2026/07/15 07:00:19 ColumnType expected, now a comma
+2026/07/15 07:00:19 the token didn't match a comma, breaking..
+2026/07/15 07:00:19 create table was a success!
+2026/07/15 07:00:19 The system knows the database[db2] exists
+2026/07/15 07:00:19 database already in session, skipping initializing it..
+2026/07/15 07:00:19 Creating table with name [tb2]
+2026/07/15 07:00:19 Table confirmed not to exist, creating it..
+2026/07/15 07:00:19 db.SaveTable hit, saving into path: /home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.tbl
+2026/07/15 07:00:19 flushing this new table to disk..
+2026/07/15 07:00:19 Flushing page[0] to disk..
+2026/07/15 07:00:19 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:00:19 pager hit, writing page..
+2026/07/15 07:00:19 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:00:19 bytes written by pager: 4096
+2026/07/15 07:00:19 page written to disk successfully!
+2026/07/15 07:00:19 Table already exists in the catalog!
+2026/07/15 07:00:19 creating fsm for the new table..
+2026/07/15 07:00:19 pager hit, writing page..
+2026/07/15 07:00:19 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:00:19 bytes written by pager: 4096
+2026/07/15 07:00:19 page written to disk successfully!
+2026/07/15 07:00:19 fsm for the intended table created and initial page persisted buy pager
+2026/07/15 07:00:19 db.SaveTable was a success..
+2026/07/15 07:00:19 Table: tb2 created successfully
+2026/07/15 07:00:43 The system knows the database[db2] exists
+2026/07/15 07:00:43 database already in session, skipping initializing it..
+2026/07/15 07:00:43 getting table tb2..
+2026/07/15 07:00:43 Get table called with args: dbName[db2]
+2026/07/15 07:00:43 table gotten by GetTable, returning it..
+2026/07/15 07:00:43 getting table tb2..
+2026/07/15 07:00:43 Get table called with args: dbName[db2]
+2026/07/15 07:00:43 table gotten by GetTable, returning it..
+2026/07/15 07:00:43 Building the fsmPath string..
+2026/07/15 07:00:43 returning fsm path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:00:43 Found matching col in the tbl schema for the column
+2026/07/15 07:00:43 Found matching col in the tbl schema for the column
+2026/07/15 07:00:43 returning this for now but Identifier logic needed!
+2026/07/15 07:00:43 Found INT value at SerializeColumnValues
+2026/07/15 07:00:43 Found an int value: 11
+2026/07/15 07:00:43 appendign to buf..
+The buf bytes: [11 0 0 0]2026/07/15 07:00:43 Found a BOOLEAN value at SerializeColumnValues
+The buf bytes: [11 0 0 0 1]2026/07/15 07:00:43 tuplebBytes len: 5
+2026/07/15 07:00:43 FittingPage hit..
+ finding fsm path to get free page of atleast size[5]
+2026/07/15 07:00:43 fsmPath to be used at FittingPage func, path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:00:43 Looking at Fsm table records next..
+2026/07/15 07:00:43 The fsm records not found for the table tb2
+2026/07/15 07:00:43 Fitting page not found, settling for the last page instead..
+2026/07/15 07:00:43 the last pageId that shall be used: 0
+2026/07/15 07:00:43 bufferpool FetchPage hit..
+2026/07/15 07:00:43 buffer frames found to be uninitialized
+2026/07/15 07:00:43 buffer frames initialized successfully
+2026/07/15 07:00:43 page not in buffer frames..
+2026/07/15 07:00:43 bytes read back by Pager: 4096
+2026/07/15 07:00:43 page fetched and added to bufferpool successfully, got it from pager, page is of id[0]
+2026/07/15 07:00:43 logging a record ..
+2026/07/15 07:00:43 The received record for logging {0 0 tb2 0 0 5 [11 0 0 0 1]}
+2026/07/15 07:00:43 current length of recBytes in serializing records: 14
+2026/07/15 07:00:43 Flushing page[0] to disk..
+2026/07/15 07:00:43 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:00:43 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:00:43 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:00:43 pager hit, writing page..
+2026/07/15 07:00:43 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:00:43 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:00:43 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:00:43 bytes written by pager: 4096
+2026/07/15 07:00:43 page written to disk successfully!
+2026/07/15 07:01:02 The system knows the database[db2] exists
+2026/07/15 07:01:02 database already in session, skipping initializing it..
+2026/07/15 07:01:02 getting table tb2..
+2026/07/15 07:01:02 Get table called with args: dbName[db2]
+2026/07/15 07:01:02 table gotten by GetTable, returning it..
+2026/07/15 07:01:02 getting table tb2..
+2026/07/15 07:01:02 Get table called with args: dbName[db2]
+2026/07/15 07:01:02 table gotten by GetTable, returning it..
+2026/07/15 07:01:02 Building the fsmPath string..
+2026/07/15 07:01:02 returning fsm path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:01:02 Found matching col in the tbl schema for the column
+2026/07/15 07:01:02 Found matching col in the tbl schema for the column
+2026/07/15 07:01:02 returning this for now but Identifier logic needed!
+2026/07/15 07:01:02 Found INT value at SerializeColumnValues
+2026/07/15 07:01:02 Found an int value: 344
+2026/07/15 07:01:02 appendign to buf..
+The buf bytes: [88 1 0 0]2026/07/15 07:01:02 Found a BOOLEAN value at SerializeColumnValues
+The buf bytes: [88 1 0 0 1]2026/07/15 07:01:02 tuplebBytes len: 5
+2026/07/15 07:01:02 FittingPage hit..
+ finding fsm path to get free page of atleast size[5]
+2026/07/15 07:01:02 fsmPath to be used at FittingPage func, path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:01:02 Looking at Fsm table records next..
+2026/07/15 07:01:02 The fsm records not found for the table tb2
+2026/07/15 07:01:02 Fitting page not found, settling for the last page instead..
+2026/07/15 07:01:02 the last pageId that shall be used: 0
+2026/07/15 07:01:02 bufferpool FetchPage hit..
+2026/07/15 07:01:02 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/15 07:01:02 logging a record ..
+2026/07/15 07:01:02 The received record for logging {14 0 tb2 0 0 5 [88 1 0 0 1]}
+2026/07/15 07:01:02 current length of recBytes in serializing records: 14
+2026/07/15 07:01:02 Flushing page[0] to disk..
+2026/07/15 07:01:02 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:01:02 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:02 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:02 data inside row 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:02 string repr 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:02 pager hit, writing page..
+2026/07/15 07:01:02 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:01:02 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:02 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:02 data inside row 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:02 string repr 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:02 bytes written by pager: 4096
+2026/07/15 07:01:02 page written to disk successfully!
+2026/07/15 07:01:59 The system knows the database[db2] exists
+2026/07/15 07:01:59 database already in session, skipping initializing it..
+2026/07/15 07:01:59 getting table tb2..
+2026/07/15 07:01:59 Get table called with args: dbName[db2]
+2026/07/15 07:01:59 table gotten by GetTable, returning it..
+2026/07/15 07:01:59 getting table tb2..
+2026/07/15 07:01:59 Get table called with args: dbName[db2]
+2026/07/15 07:01:59 table gotten by GetTable, returning it..
+2026/07/15 07:01:59 Building the fsmPath string..
+2026/07/15 07:01:59 returning fsm path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:01:59 Found matching col in the tbl schema for the column
+2026/07/15 07:01:59 Found matching col in the tbl schema for the column
+2026/07/15 07:01:59 returning this for now but Identifier logic needed!
+2026/07/15 07:01:59 Found INT value at SerializeColumnValues
+2026/07/15 07:01:59 Found an int value: 777
+2026/07/15 07:01:59 appendign to buf..
+The buf bytes: [9 3 0 0]2026/07/15 07:01:59 Found a BOOLEAN value at SerializeColumnValues
+The buf bytes: [9 3 0 0 0]2026/07/15 07:01:59 tuplebBytes len: 5
+2026/07/15 07:01:59 FittingPage hit..
+ finding fsm path to get free page of atleast size[5]
+2026/07/15 07:01:59 fsmPath to be used at FittingPage func, path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:01:59 Looking at Fsm table records next..
+2026/07/15 07:01:59 The fsm records not found for the table tb2
+2026/07/15 07:01:59 Fitting page not found, settling for the last page instead..
+2026/07/15 07:01:59 the last pageId that shall be used: 0
+2026/07/15 07:01:59 bufferpool FetchPage hit..
+2026/07/15 07:01:59 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/15 07:01:59 logging a record ..
+2026/07/15 07:01:59 The received record for logging {28 0 tb2 0 0 5 [9 3 0 0 0]}
+2026/07/15 07:01:59 current length of recBytes in serializing records: 14
+2026/07/15 07:01:59 Flushing page[0] to disk..
+2026/07/15 07:01:59 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:01:59 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:59 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:59 data inside row 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:59 string repr 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:59 data inside row 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:01:59 string repr 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:01:59 pager hit, writing page..
+2026/07/15 07:01:59 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:01:59 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:59 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:01:59 data inside row 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:59 string repr 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:01:59 data inside row 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:01:59 string repr 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:01:59 bytes written by pager: 4096
+2026/07/15 07:01:59 page written to disk successfully!
+2026/07/15 07:02:19 The system knows the database[db2] exists
+2026/07/15 07:02:19 database already in session, skipping initializing it..
+2026/07/15 07:02:19 getting table tb2..
+2026/07/15 07:02:19 Get table called with args: dbName[db2]
+2026/07/15 07:02:19 table gotten by GetTable, returning it..
+2026/07/15 07:02:19 getting table tb2..
+2026/07/15 07:02:19 Get table called with args: dbName[db2]
+2026/07/15 07:02:19 table gotten by GetTable, returning it..
+2026/07/15 07:02:19 Building the fsmPath string..
+2026/07/15 07:02:19 returning fsm path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:02:19 Found matching col in the tbl schema for the column
+2026/07/15 07:02:19 Found matching col in the tbl schema for the column
+2026/07/15 07:02:19 returning this for now but Identifier logic needed!
+2026/07/15 07:02:19 Found INT value at SerializeColumnValues
+2026/07/15 07:02:19 Found an int value: 98
+2026/07/15 07:02:19 appendign to buf..
+The buf bytes: [98 0 0 0]2026/07/15 07:02:19 Found a BOOLEAN value at SerializeColumnValues
+The buf bytes: [98 0 0 0 1]2026/07/15 07:02:19 tuplebBytes len: 5
+2026/07/15 07:02:19 FittingPage hit..
+ finding fsm path to get free page of atleast size[5]
+2026/07/15 07:02:19 fsmPath to be used at FittingPage func, path[/home/nines/Desktop/gon/real_dbms/REALDB/db2/tb2.fsm]
+2026/07/15 07:02:19 Looking at Fsm table records next..
+2026/07/15 07:02:19 The fsm records not found for the table tb2
+2026/07/15 07:02:19 Fitting page not found, settling for the last page instead..
+2026/07/15 07:02:19 the last pageId that shall be used: 0
+2026/07/15 07:02:19 bufferpool FetchPage hit..
+2026/07/15 07:02:19 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/15 07:02:19 logging a record ..
+2026/07/15 07:02:19 The received record for logging {42 0 tb2 0 0 5 [98 0 0 0 1]}
+2026/07/15 07:02:19 current length of recBytes in serializing records: 14
+2026/07/15 07:02:19 Flushing page[0] to disk..
+2026/07/15 07:02:19 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:02:19 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:02:19 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:02:19 data inside row 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:02:19 string repr 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:02:19 data inside row 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:02:19 string repr 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:02:19 data inside row 3 :DATUM[[98 0 0 0 1]]
+2026/07/15 07:02:19 string repr 3 :DATUM[[98 0 0 0 1]]
+2026/07/15 07:02:19 pager hit, writing page..
+2026/07/15 07:02:19 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/15 07:02:19 data inside row 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:02:19 string repr 0 :DATUM[[11 0 0 0 1]]
+2026/07/15 07:02:19 data inside row 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:02:19 string repr 1 :DATUM[[88 1 0 0 1]]
+2026/07/15 07:02:19 data inside row 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:02:19 string repr 2 :DATUM[[9 3 0 0 0]]
+2026/07/15 07:02:19 data inside row 3 :DATUM[[98 0 0 0 1]]
+2026/07/15 07:02:19 string repr 3 :DATUM[[98 0 0 0 1]]
+2026/07/15 07:02:19 bytes written by pager: 4096
+2026/07/15 07:02:19 page written to disk successfully!
+2026/07/15 07:02:32 The select stmt shall be from TableName:tb2 and the column: makao
+2026/07/15 07:02:32 Carrying out select on table: tb2, for columns: [makao ako]
+2026/07/15 07:02:32 The system knows the database[db2] exists
+2026/07/15 07:02:32 database already in session, skipping initializing it..
+2026/07/15 07:02:32 getting table tb2..
+2026/07/15 07:02:32 Get table called with args: dbName[db2]
+2026/07/15 07:02:32 table gotten by GetTable, returning it..
+2026/07/15 07:02:32 getting table tb2..
+2026/07/15 07:02:32 Get table called with args: dbName[db2]
+2026/07/15 07:02:32 table gotten by GetTable, returning it..
+2026/07/15 07:02:32 bufferpool FetchPage hit..
+2026/07/15 07:02:32 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/15 07:02:32 Reading the slot index[0] of pageId[0]
+2026/07/15 07:02:32 And the tuple received was: {map[ako:{0 true} makao:{1    }]}
+2026/07/15 07:02:32 Found a value: {1    } For colName: makao
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  0b 00 00 00
+2026/07/15 07:02:32 Found a value: {0 true} For colName: ako
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  74 72 75 65
+2026/07/15 07:02:32 The row after executor.Project(takes in a tuple): [    true]
+2026/07/15 07:02:32 Reading the slot index[1] of pageId[0]
+2026/07/15 07:02:32 And the tuple received was: {map[ako:{0 true} makao:{1 X  }]}
+2026/07/15 07:02:32 Found a value: {1 X  } For colName: makao
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  58 01 00 00
+2026/07/15 07:02:32 Found a value: {0 true} For colName: ako
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  74 72 75 65
+2026/07/15 07:02:32 The row after executor.Project(takes in a tuple): [X   true]
+2026/07/15 07:02:32 Reading the slot index[2] of pageId[0]
+2026/07/15 07:02:32 And the tuple received was: {map[ako:{0 false} makao:{1 	  }]}
+2026/07/15 07:02:32 Found a value: {1 	  } For colName: makao
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  09 03 00 00
+2026/07/15 07:02:32 Found a value: {0 false} For colName: ako
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  66 61 6c 73 65
+2026/07/15 07:02:32 The row after executor.Project(takes in a tuple): [	   false]
+2026/07/15 07:02:32 Reading the slot index[3] of pageId[0]
+2026/07/15 07:02:32 And the tuple received was: {map[ako:{0 true} makao:{1 b   }]}
+2026/07/15 07:02:32 Found a value: {1 b   } For colName: makao
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  62 00 00 00
+2026/07/15 07:02:32 Found a value: {0 true} For colName: ako
+2026/07/15 07:02:32 Checking the type for value, according to go runtime it is(value.Value): string
+2026/07/15 07:02:32 Trying to use hex:  74 72 75 65
+2026/07/15 07:02:32 The row after executor.Project(takes in a tuple): [b    true]
+2026/07/15 07:02:32 The final results before returning the select: [[    true] [X   true] [	   false] [b    true]]

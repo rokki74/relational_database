@@ -9,5 +9,7 @@ check_hex:
 	python3 script.py
 
 clean:
-	rm -f dbs *.logs
-	rm -r $(DIR)/REALDB
+	-mv *.logs *.log $(DIR)/log_archives
+	rm -f dbs
+	-rm -r $(DIR)/REALDB
+

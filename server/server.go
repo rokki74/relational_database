@@ -28,7 +28,7 @@ func RunServerManager(){
 var cnts int = 0
 func (s *Server) Start(port string) {
 	cnts++
-	log.Printf("called the %v", cnts)
+	log.Printf("called start server the %v time", cnts)
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("error from server trying to listen to port, %v", err)
@@ -36,8 +36,6 @@ func (s *Server) Start(port string) {
 	defer ln.Close()
 
 	fmt.Println("DB Server running on port", port)
-
-	fmt.Println("Server up and running, Waiting for requests..")
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -94,7 +92,7 @@ func (s *Server) executeSQL(sql string, executor *sqlCompiler.Executor) ([][]str
 
 	stmt := parser.ParseStatement()
 	if stmt == nil {
-		return nil, fmt.Errorf("failed to parse SQL, It might be empty: %v", stmt)
+		return nil, fmt.Errorf("failed to parse SQL, It might be empty, The stmt: %v", stmt)
 	}
 
 	result := executor.Execute(stmt)

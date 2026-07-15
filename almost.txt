@@ -1,0 +1,24 @@
+nines@m734:~/Desktop/gon/real_dbms$ nc localhost 5439
+db > create database db2;use db2;create table tb2(makao int, ako b
+oolean);
+OK
+db > OK
+db > OK
+db > insert into tb2(makao,ako)values(11,true);
+OK
+db > insert into tb2(makao,ako)values(344,true);
+OK
+db > insert into tb2(makao,ako)values(777,false);
+OK
+db > insert into tb2(makao,ako)values(98,true);
+OK
+db > select makao,ako from tb2;
+
+ | true
+X | true
+         | false
+b | true
+
+db > 
+
+
