@@ -1,0 +1,214 @@
+2026/07/14 12:50:30 SYSTEM STARTING..
+2026/07/14 12:50:30 The catalog init was successful, ..yet to load, have a look: &{map[] /home/nines/Desktop/gon/real_dbms/REALDB/sys}
+2026/07/14 12:50:30 NewCatalog done!
+2026/07/14 12:50:30 ready to scan the sys_databases_m file
+2026/07/14 12:50:30 File is empty. Skipping read loop.
+2026/07/14 12:50:30 Started successfully!
+2026/07/14 12:50:30 called the 1
+DB Server running on port :5439
+Server up and running, Waiting for requests..
+Client connected: 127.0.0.1:46072
+2026/07/14 12:51:09 parse create was hit, expecting a CREATE keyword now!
+2026/07/14 12:51:09 done expecting CREATE keyword, looking at the identType, it is a: DATABASE
+2026/07/14 12:51:09 expecting an IDENT from now!
+2026/07/14 12:51:09 The database created successfully, updating it into the catalog
+2026/07/14 12:51:09 Add database catalog hit, in a bid to add the dbName into in-mem catalog
+2026/07/14 12:51:09 Db added to the catalog successfully!
+2026/07/14 12:51:09 executing the use statement, trying to get the db from system catalog
+2026/07/14 12:51:09 The system knows the database[db1] exists
+2026/07/14 12:51:09 Adding the db[db1] to sessions as it didn't exist
+2026/07/14 12:51:09 initializing then later adding database into session..
+2026/07/14 12:51:09 New fsm Manager successfully initialized
+2026/07/14 12:51:09 database successfully initialized!
+2026/07/14 12:51:09 Get database was a success, adding it as the current session of the executor, DBNAME: db1
+2026/07/14 12:51:09 checking whether the e.CurrentDB is set: CurrentDB[db1]
+2026/07/14 12:51:31 parse create was hit, expecting a CREATE keyword now!
+2026/07/14 12:51:31 done expecting CREATE keyword, looking at the identType, it is a: TABLE
+2026/07/14 12:51:31 expecting an IDENT from now!
+2026/07/14 12:51:31 parse create table hit, expecting a TABLE keyword as an IDENT now!
+2026/07/14 12:51:31 Upto this point we got a tableName from the statement, it is: tb1
+2026/07/14 12:51:31 Expecting the table name so next we can expect an LPAREN
+2026/07/14 12:51:31 a LPAREN is already expected, moving into deserializing the columns now
+2026/07/14 12:51:31 the LPAREN id no is: 11
+2026/07/14 12:51:31 The net put into the columns river caught a fish column called: makao
+2026/07/14 12:51:31 The anticipated column type is: INT
+2026/07/14 12:51:31 The int type case
+2026/07/14 12:51:31 Expecting the column type
+2026/07/14 12:51:31 ColumnType expected, now a comma
+2026/07/14 12:51:31 continuing with the column loop..
+2026/07/14 12:51:31 The net put into the columns river caught a fish column called: ako
+2026/07/14 12:51:31 The anticipated column type is: BOOLEAN
+2026/07/14 12:51:31 Expecting the column type
+2026/07/14 12:51:31 ColumnType expected, now a comma
+2026/07/14 12:51:31 the token didn't match a comma, breaking..
+2026/07/14 12:51:31 create table was a success!
+2026/07/14 12:51:31 execCreateTbl hit. Caution, the session might be nil..
+2026/07/14 12:51:31 checking whether the e.CurrentDB is set: CurrentDB[&{db1 0xc0000301a0 0xc0000120a8 0xc0001240e8 0xc000108780 {0 map[] 0xc0000702a0 0xc000046090} /home/nines/Desktop/gon/real_dbms/REALDB/db1}]
+2026/07/14 12:51:31 The system knows the database[db1] exists
+2026/07/14 12:51:31 database already in session, skipping initializing it..
+2026/07/14 12:51:31 The db does exist and now going to create the table!
+2026/07/14 12:51:31 Creating table with name [tb1]
+2026/07/14 12:51:31 Table confirmed not to exist, creating it..
+2026/07/14 12:51:31 db.SaveTable hit, saving into path: /home/nines/Desktop/gon/real_dbms/REALDB/db1/tb1.tbl
+2026/07/14 12:51:31 flushing this new table to disk..
+2026/07/14 12:51:31 Flushing page[0] to disk..
+2026/07/14 12:51:31 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:51:31 pager hit, writing page..
+2026/07/14 12:51:31 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:51:31 bytes written by pager: 4096
+2026/07/14 12:51:31 page written to disk successfully!
+2026/07/14 12:51:31 Table already exists in the catalog!
+2026/07/14 12:51:31 creating fsm for the new table..
+2026/07/14 12:51:31 pager hit, writing page..
+2026/07/14 12:51:31 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:51:31 bytes written by pager: 4096
+2026/07/14 12:51:31 page written to disk successfully!
+2026/07/14 12:51:31 fsm for the intended table created and initial page persisted buy pager
+2026/07/14 12:51:31 db.SaveTable was a success..
+2026/07/14 12:51:31 Table: tb1 created successfully
+2026/07/14 12:52:07 The system knows the database[db1] exists
+2026/07/14 12:52:07 database already in session, skipping initializing it..
+2026/07/14 12:52:07 getting table tb1..
+2026/07/14 12:52:07 Get table called with args: dbName[db1]
+2026/07/14 12:52:07 table gotten by GetTable, returning it..
+2026/07/14 12:52:07 getting table tb1..
+2026/07/14 12:52:07 Get table called with args: dbName[db1]
+2026/07/14 12:52:07 table gotten by GetTable, returning it..
+2026/07/14 12:52:07 Building the fsmPath string..
+2026/07/14 12:52:07 returning fsm path[/home/nines/Desktop/gon/real_dbms/REALDB/db1/tb1.fsm]
+2026/07/14 12:52:07 Found matching col in the tbl schema for the column
+2026/07/14 12:52:07 Found matching col in the tbl schema for the column
+2026/07/14 12:52:07 returning this for now but Identifier logic needed!
+2026/07/14 12:52:07 Found INT value at SerializeColumnValues
+2026/07/14 12:52:07 Found an int value: 759
+2026/07/14 12:52:07 appendign to buf..
+The buf bytes: [247 2 0 0]2026/07/14 12:52:07 Found a BOOLEAN value at SerializeColumnValues
+The buf bytes: [247 2 0 0 1]2026/07/14 12:52:07 tuplebBytes len: 5
+2026/07/14 12:52:07 FittingPage hit..
+ finding fsm path to get free page of atleast size[5]
+2026/07/14 12:52:07 fsmPath to be used at FittingPage func, path[/home/nines/Desktop/gon/real_dbms/REALDB/db1/tb1.fsm]
+2026/07/14 12:52:07 Looking at Fsm table records next..
+2026/07/14 12:52:07 The fsm records not found for the table tb1
+2026/07/14 12:52:07 Fitting page not found, settling for the last page instead..
+2026/07/14 12:52:07 the last pageId that shall be used: 0
+2026/07/14 12:52:07 at executor.go line 221
+2026/07/14 12:52:07 bufferpool FetchPage hit..
+2026/07/14 12:52:07 buffer frames found to be uninitialized
+2026/07/14 12:52:07 buffer frames initialized successfully
+2026/07/14 12:52:07 page not in buffer frames..
+2026/07/14 12:52:07 bytes read back by Pager: 4096
+2026/07/14 12:52:07 page fetched and added to bufferpool successfully, got it from pager, page is of id[0]
+2026/07/14 12:52:07 logging a record ..
+2026/07/14 12:52:07 The received record for logging {0 0 tb1 0 0 5 [247 2 0 0 1]}
+2026/07/14 12:52:07 current length of recBytes in serializing records: 14
+2026/07/14 12:52:07 Insert was a success!
+2026/07/14 12:52:07 flushing for now..
+2026/07/14 12:52:07 Flushing page[0] to disk..
+2026/07/14 12:52:07 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:52:07 data inside row 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:07 string repr 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:07 pager hit, writing page..
+2026/07/14 12:52:07 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:52:07 data inside row 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:07 string repr 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:07 bytes written by pager: 4096
+2026/07/14 12:52:07 page written to disk successfully!
+2026/07/14 12:52:39 The system knows the database[db1] exists
+2026/07/14 12:52:39 database already in session, skipping initializing it..
+2026/07/14 12:52:39 getting table tb1..
+2026/07/14 12:52:39 Get table called with args: dbName[db1]
+2026/07/14 12:52:39 table gotten by GetTable, returning it..
+2026/07/14 12:52:39 getting table tb1..
+2026/07/14 12:52:39 Get table called with args: dbName[db1]
+2026/07/14 12:52:39 table gotten by GetTable, returning it..
+2026/07/14 12:52:39 Building the fsmPath string..
+2026/07/14 12:52:39 returning fsm path[/home/nines/Desktop/gon/real_dbms/REALDB/db1/tb1.fsm]
+2026/07/14 12:52:39 Found matching col in the tbl schema for the column
+2026/07/14 12:52:39 Found matching col in the tbl schema for the column
+2026/07/14 12:52:39 returning this for now but Identifier logic needed!
+2026/07/14 12:52:39 Found INT value at SerializeColumnValues
+2026/07/14 12:52:39 Found an int value: 33
+2026/07/14 12:52:39 appendign to buf..
+The buf bytes: [33 0 0 0]2026/07/14 12:52:39 Found a BOOLEAN value at SerializeColumnValues
+The buf bytes: [33 0 0 0 0]2026/07/14 12:52:39 tuplebBytes len: 5
+2026/07/14 12:52:39 FittingPage hit..
+ finding fsm path to get free page of atleast size[5]
+2026/07/14 12:52:39 fsmPath to be used at FittingPage func, path[/home/nines/Desktop/gon/real_dbms/REALDB/db1/tb1.fsm]
+2026/07/14 12:52:39 Looking at Fsm table records next..
+2026/07/14 12:52:39 The fsm records not found for the table tb1
+2026/07/14 12:52:39 Fitting page not found, settling for the last page instead..
+2026/07/14 12:52:39 the last pageId that shall be used: 0
+2026/07/14 12:52:39 at executor.go line 221
+2026/07/14 12:52:39 bufferpool FetchPage hit..
+2026/07/14 12:52:39 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/14 12:52:39 logging a record ..
+2026/07/14 12:52:39 The received record for logging {14 0 tb1 0 0 5 [33 0 0 0 0]}
+2026/07/14 12:52:39 current length of recBytes in serializing records: 14
+2026/07/14 12:52:39 Insert was a success!
+2026/07/14 12:52:39 flushing for now..
+2026/07/14 12:52:39 Flushing page[0] to disk..
+2026/07/14 12:52:39 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:52:39 data inside row 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:39 string repr 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:39 data inside row 1 :DATUM[[33 0 0 0 0]]
+2026/07/14 12:52:39 string repr 1 :DATUM[[33 0 0 0 0]]
+2026/07/14 12:52:39 pager hit, writing page..
+2026/07/14 12:52:39 DEBBUGGING THE PAGE DATA ROWS..
+2026/07/14 12:52:39 data inside row 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:39 string repr 0 :DATUM[[247 2 0 0 1]]
+2026/07/14 12:52:39 data inside row 1 :DATUM[[33 0 0 0 0]]
+2026/07/14 12:52:39 string repr 1 :DATUM[[33 0 0 0 0]]
+2026/07/14 12:52:39 bytes written by pager: 4096
+2026/07/14 12:52:39 page written to disk successfully!
+2026/07/14 12:52:53 The select stmt shall be from TableName:tb1 and the column: makao
+2026/07/14 12:52:53 e.CurrentDB is: &{db1 0xc0000301a0 0xc0000120a8 0xc0001240e8 0xc000108780 {0 map[] 0xc0000702a0 0xc000046090} /home/nines/Desktop/gon/real_dbms/REALDB/db1}
+2026/07/14 12:52:53 The system knows the database[db1] exists
+2026/07/14 12:52:53 database already in session, skipping initializing it..
+2026/07/14 12:52:53 getting table tb1..
+2026/07/14 12:52:53 Get table called with args: dbName[db1]
+2026/07/14 12:52:53 table gotten by GetTable, returning it..
+2026/07/14 12:52:53 getting table tb1..
+2026/07/14 12:52:53 Get table called with args: dbName[db1]
+2026/07/14 12:52:53 table gotten by GetTable, returning it..
+2026/07/14 12:52:53 bufferpool FetchPage hit..
+2026/07/14 12:52:53 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/14 12:52:53 Page gotten successfully, getting it's rows
+2026/07/14 12:52:53 Checking the no of valid slots in Select's Page. Row counts: 2
+2026/07/14 12:52:53 Dived into the looooooooooppppppp!
+2026/07/14 12:52:53 Called continue oh no, is the slot really dead!!!!!
+2026/07/14 12:52:53 Dived into the looooooooooppppppp!
+2026/07/14 12:52:53 Called continue oh no, is the slot really dead!!!!!
+2026/07/14 12:52:53 The final len of results before returning the select: 0
+2026/07/14 12:52:53 The final results before returning the select: []
+2026/07/14 12:53:02 The select stmt shall be from TableName:tb1 and the column: makao
+2026/07/14 12:53:02 e.CurrentDB is: &{db1 0xc0000301a0 0xc0000120a8 0xc0001240e8 0xc000108780 {0 map[] 0xc0000702a0 0xc000046090} /home/nines/Desktop/gon/real_dbms/REALDB/db1}
+2026/07/14 12:53:02 The system knows the database[db1] exists
+2026/07/14 12:53:02 database already in session, skipping initializing it..
+2026/07/14 12:53:02 getting table tb1..
+2026/07/14 12:53:02 Get table called with args: dbName[db1]
+2026/07/14 12:53:02 table gotten by GetTable, returning it..
+2026/07/14 12:53:02 getting table tb1..
+2026/07/14 12:53:02 Get table called with args: dbName[db1]
+2026/07/14 12:53:02 table gotten by GetTable, returning it..
+2026/07/14 12:53:02 bufferpool FetchPage hit..
+2026/07/14 12:53:02 page fetched and added to bufferpool successfully, got it from bufferpool memory, page is of id[0]
+2026/07/14 12:53:02 Page gotten successfully, getting it's rows
+2026/07/14 12:53:02 Checking the no of valid slots in Select's Page. Row counts: 2
+2026/07/14 12:53:02 Dived into the looooooooooppppppp!
+2026/07/14 12:53:02 Called continue oh no, is the slot really dead!!!!!
+2026/07/14 12:53:02 Dived into the looooooooooppppppp!
+2026/07/14 12:53:02 Called continue oh no, is the slot really dead!!!!!
+2026/07/14 12:53:02 The final len of results before returning the select: 0
+2026/07/14 12:53:02 The final results before returning the select: []
+2026/07/14 12:53:09 Expected a 1 found value * of type 10
+2026/07/14 12:53:09 Expected a 19 found value * of type 10
+2026/07/14 12:53:09 Expected a 1 found value * of type 10
+2026/07/14 12:53:09 The select stmt shall be from TableName:* and the column: *
+2026/07/14 12:53:09 e.CurrentDB is: &{db1 0xc0000301a0 0xc0000120a8 0xc0001240e8 0xc000108780 {0 map[] 0xc0000702a0 0xc000046090} /home/nines/Desktop/gon/real_dbms/REALDB/db1}
+2026/07/14 12:53:09 The system knows the database[db1] exists
+2026/07/14 12:53:09 database already in session, skipping initializing it..
+2026/07/14 12:53:09 getting table *..
+2026/07/14 12:53:09 Get table called with args: dbName[db1]
+2026/07/14 12:53:09 Table Doesn't exist!
+2026/07/14 12:53:09 Table does not exist
+2026/07/14 12:53:09 No data to select!, --debugging purposes

@@ -1,0 +1,2 @@
+I realised why the select is returning zero results as i create a results array wich is never getting data appended into as the loop supposed to
+do so is never ran even, so the header.RowCount is 1 and i am looping for slot 0 ipto this RowCount. Is this the problem, okay if row counts is 1, then the slots index must be zero? okay let me look at it again

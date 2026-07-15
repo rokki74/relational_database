@@ -81,16 +81,13 @@ func (e *Executor) execUseStmt(stmt *UseStmt){
 		return
 	}
 
-	log.Printf("Get database was a success, adding it as the current session of the executor, DBNAME: %v", dbMngr.Dbname)
 	e.CurrentDB = dbMngr
 
-	log.Printf("checking whether the e.CurrentDB is set: CurrentDB[%v]", e.CurrentDB.Dbname)
 }
 
 func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 	 //I think checking this way might be the problem so how do i do this? can't directly check if it is a nil??
 	 //Okay let me print the e.CurrentDB and really see
-	 log.Printf("e.CurrentDB is: %v", e.CurrentDB)
 			db := e.CurrentDB
 			if _, prsnt := e.Syst.GetDatabase(db.Dbname); !prsnt{
 				log.Printf("Database doesn't exist for real")
@@ -111,24 +108,19 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 						continue
 					}
 					header := page.Read_header()
-					log.Printf("Page gotten successfully, getting it's rows")
 					for s := 0; s < int(header.RowCount); s++ {
-							if !page.SlotDead(s) {
+							if page.SlotDead(s) {
 									continue
 							}
               log.Printf("Reading the slot index[%v] of pageId[%v]", s, header.PageId)
 							tupleBs := page.Read_row(s)
-							log.Printf("The tupleBs read: %v", tupleBs)
 							//Build tuple
-							log.Printf("length of row read: %v", len(tupleBs))
 							tuple := e.buildTup(table.TableSchema, tupleBs)
 
 							log.Printf("The tuple after e.buildTup func: %v", tuple)
-							tp := rowByteIntoTuple(table.TableSchema, tupleBs)
 
-							log.Printf("The tuple after rowByteIntoTuple func: %v", tp)
 							if stmt.Where != nil {
-									if !e.evalExpr(stmt.Where, *tp) {
+									if !e.evalExpr(stmt.Where, tuple) {
 											continue
 									}
 							}
@@ -139,8 +131,6 @@ func (e *Executor) execSelect(stmt *SelectStmt) ([][]string, bool) {
 							results = append(results, row)
 					}
 			}
-
-			log.Printf("The final len of results before returning the select: %v", len(results))
 
 			log.Printf("The final results before returning the select: %v", results)
 			return results, true
@@ -176,28 +166,21 @@ func (e *Executor) execInsert(stmt *InsertStmt) {
 				continue
 			}
 
-			log.Printf("THE FOUND COLTYPE FOR COLNAME(%v) WAS %v", colName, colType);
 			colTypes = append(colTypes, colType)
 			colNames = append(colNames, colName)
 		} 
 
     // 1. Evaluate values
     values := make([]string, 0)
-		log.Printf("Evaluating the values for insert..")
 		for _, val := range stmt.Values{
       value := e.evalValue(val, Tuple{})
 			values = append(values, value)
 		}
 
-    log.Printf("Done evaluating")
     // 2. Encode tupleBytes/serializedBs 
 		tupleBytes := table.SerializeColumnValues(values, colTypes)
-    log.Printf("values serialized: %v\n", values)
-		log.Printf("colTypes serialized: %v\n", colTypes)
-    log.Printf("tupleBytes to write: %v\n", tupleBytes)
-
+    log.Printf("tuplebBytes len: %v", len(tupleBytes))
     // 3. Find page with space (FSM)
-		log.Printf("looking to find a fitting page..")
     pageID, fsmPage, availed := db.BufferPool.FittingPage(table.TableName, fsmPath, uint16(len(tupleBytes)))
 		if availed{
 			  log.Printf("A fitting page was found, using it..")
@@ -341,10 +324,13 @@ func (e *Executor) project(columns []string, tuple Tuple) []string {
     var row []string
 
     for _, col := range columns {
+			  log.Printf("Projecting colName[%v]", col)
 			  tupData, ok := tuple.Get(col)
 				if !ok{
 					continue
 				}
+				log.Printf("Tupdata value: tupData.Value[%v]", tupData.Value)
+				log.Printf("Row is currently: %v",row)
         row = append(row, tupData.Value)
     }
 
@@ -522,7 +508,8 @@ func (tp *Tuple) Get(colName string) (TupData, bool){
 func (e *Executor) buildTup(schema myDatabase.Schema, rowBs []byte) Tuple{
  columns := schema.Columns 
  tuple := Tuple{}
- 
+ tuple.Tup = make(map[string]TupData) 
+
  offset := 0
  for _, col := range columns{
 	 switch col.ColumnType{
