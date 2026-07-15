@@ -1,5 +1,15 @@
 ===select statement not returning results===
 I realised why the select is returning zero results as i create a results array wich is never getting data appended into as the loop supposed to
 do so is never ran even, so the header.RowCount is 1 and i am looping for slot 0 ipto this RowCount. Is this the problem, okay if row counts is 1, then the slots index must be zero? okay let me look at it again
+soln: The problem was that i was skipping the rows as i errenously checked if ! slot.SlotDead(slot_index) which caused the whole addition of data into results array to be skipped and the final results array to be empty.
 ===Bug in executor.project -not building back the tuple into real string rows===
+soln: Currently i have resolved the buildTup plus another function rowByteIntoTuple() these two do the same thing and i was using them interchangeably passing columns and row's bytes  into each and then using the second function to construct the tuple, the function itself was errenous in the context and returned bad results thus i have removed the redundancy of there being two similar functions and maintained the correct builtTup function instead. So up until now the select has started showing results but only correctly shows for boolean columns the rest of columns is either empty or in hex still.
+===Bug of only Boolean values stored being the only ones that can be fetched back by user, bug in translation from page row's byte into required formats of other colum types===
+Currently whenever non boolean values or columns stored when fetched back they are empty or non readable hex format.
+soln: working on buildTup and for INT ColumnType i now read back bytes using binary.Uint32(rowBS[offset])
+Another spotted bug i was reading offsets of other types when i fail to update the offset variable on every row column read.(corrected was just a suspicion found that i had handled it)
+Challenge: haven't implemented supprrt for strings yet still developing will also need to experiment with this also.
+===Bug the user gets back runes or characters instead of his stored strings on select statement===
+probe: found that i used string(value) where value here was uint32 thus causing this bug.
+soln: Have corrected the line using string() into using strconv.FormatUint() with base ten and now geting back the expected data.
 

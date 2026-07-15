@@ -313,23 +313,7 @@ func (e *Executor) project(tuple Tuple) []string {
     
 		for colName,value := range tuple.Tup{
 			log.Printf("Found a value: %v For colName: %v", value,colName)
-			switch value.Type{
-			   case 0: log.Printf("So it is a bool")
-			           if value.Value == 0{
-									 log.Printf("Shld have been a false then making it so.")
-									 value.Value = "false"
-								 }else{
-									 log.Printf("SHould have been a true, making it so.")
-									 value.Value = "true"
-								 } 
-					case 1: log.Printf("So it is a int")
-					       log.Printf("Turning the string value.Value into int")
-
-					case 2: 
-					        log.Printf("So it is a string. \n TODO later implement logic for string")
-					default: log.Printf("So it is none of the matching cases then.")
-			}
-			row = append(row, value.Value)
+				row = append(row, value.Value)
 		}
 
     return row
@@ -520,8 +504,9 @@ func (e *Executor) buildTup(schema myDatabase.Schema, rowBs []byte) Tuple{
 			 }
 			 offset = offset + 1
 	   case myDatabase.INT:
-       val := rowBs[offset:offset+4]
-       tuple.Tup[col.ColumnName] = TupData{myDatabase.INT, string(val)} 
+       val := binary.LittleEndian.Uint32(rowBs[offset:offset+4])
+			 log.Printf("Value of val in buildTup: %v", val)
+       tuple.Tup[col.ColumnName] = TupData{myDatabase.INT, strconv.FormatUint(uint64(val), 10)} 
 			 offset = offset+4
 		 case myDatabase.STRING:
 			 val := rowBs[offset:offset+4]
